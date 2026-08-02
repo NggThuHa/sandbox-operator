@@ -40,6 +40,12 @@ import (
 	"github.com/NguyenTuKien/TYP-Operator/internal/utils"
 )
 
+const (
+	PhaseRunning  = "Running"
+	PhaseCreating = "Creating"
+	PhaseFailed   = "Failed"
+)
+
 // VirtualClusterReconciler đóng vai trò là "Người quản lý cơ sở hạ tầng" của nền tảng Lab.
 // Chi phối các vùng không gian con (Namespace), áp đặt chính sách mạng và giới hạn tài nguyên.
 type VirtualClusterReconciler struct {
@@ -188,7 +194,7 @@ func (r *VirtualClusterReconciler) reconcileFinalizer(ctx context.Context, virtu
 	return ctrl.Result{}, nil
 }
 
-func (r *VirtualClusterReconciler) reconcileTTL(ctx context.Context, virtualCluster *labv1alpha1.VirtualCluster) (bool, time.Duration, error) {
+func (r *VirtualClusterReconciler) reconcileTTL(_ context.Context, virtualCluster *labv1alpha1.VirtualCluster) (bool, time.Duration, error) {
 	if virtualCluster.Spec.TTL == "" {
 		virtualCluster.Status.ExpiresAt = nil
 		return false, 0, nil
@@ -336,7 +342,7 @@ func (r *VirtualClusterReconciler) reconcileNetworkPolicy(ctx context.Context, v
 // ============================================================================
 
 func (r *VirtualClusterReconciler) updateVirtualClusterStatus(ctx context.Context, virtualCluster *labv1alpha1.VirtualCluster, nsName string) error {
-	virtualCluster.Status.Phase = "Running"
+	virtualCluster.Status.Phase = PhaseRunning
 	virtualCluster.Status.TargetNamespace = nsName
 
 	quota := &corev1.ResourceQuota{}
@@ -388,7 +394,7 @@ func (r *VirtualClusterReconciler) updateVirtualClusterStatus(ctx context.Contex
 }
 
 func (r *VirtualClusterReconciler) updateStatusFailed(ctx context.Context, virtualCluster *labv1alpha1.VirtualCluster, reason, message string) {
-	virtualCluster.Status.Phase = "Failed"
+	virtualCluster.Status.Phase = PhaseFailed
 	utils.SetCondition(&virtualCluster.Status.Conditions, "Ready", metav1.ConditionFalse, reason, message)
 	_ = r.Status().Update(ctx, virtualCluster)
 }

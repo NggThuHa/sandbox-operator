@@ -214,7 +214,7 @@ func (r *VirtualInstanceReconciler) reconcilePVCs(ctx context.Context, virtualIn
 	pvcMap := make(map[string]string)
 	var volStatus labv1alpha1.VirtualInstanceVolumesStatus
 
-	createPVC := func(pvcName, volType string, size resource.Quantity, isRoot bool, labelName string) (labv1alpha1.VirtualInstanceVolumeStatusDetail, error) {
+	createPVC := func(pvcName, volType string, size resource.Quantity, _ bool, labelName string) (labv1alpha1.VirtualInstanceVolumeStatusDetail, error) {
 		pvc := &corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      pvcName,
@@ -230,7 +230,7 @@ func (r *VirtualInstanceReconciler) reconcilePVCs(ctx context.Context, virtualIn
 			pvc.Labels[utils.LabelVirtualCluster] = virtualInstance.Spec.VirtualClusterRef
 			pvc.Labels[utils.LabelVirtualInstance] = virtualInstance.Name
 
-			if pvc.Spec.AccessModes == nil || len(pvc.Spec.AccessModes) == 0 {
+			if len(pvc.Spec.AccessModes) == 0 {
 				pvc.Spec.AccessModes = []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
 			}
 
@@ -536,22 +536,22 @@ func (r *VirtualInstanceReconciler) updateVirtualInstanceStatus(ctx context.Cont
 
 		switch pod.Status.Phase {
 		case corev1.PodRunning:
-			virtualInstance.Status.Phase = "Running"
+			virtualInstance.Status.Phase = PhaseRunning
 			utils.SetCondition(&virtualInstance.Status.Conditions, "PodReady", metav1.ConditionTrue, "ContainerRunning", "Sysbox VM instance is running and responsive")
 		case corev1.PodPending:
-			virtualInstance.Status.Phase = "Creating"
+			virtualInstance.Status.Phase = PhaseCreating
 			utils.SetCondition(&virtualInstance.Status.Conditions, "PodReady", metav1.ConditionFalse, "PodPending", "Waiting for K8s scheduler and volume mounting")
 		case corev1.PodFailed:
-			virtualInstance.Status.Phase = "Failed"
+			virtualInstance.Status.Phase = PhaseFailed
 			utils.SetCondition(&virtualInstance.Status.Conditions, "PodReady", metav1.ConditionFalse, "PodFailed", "Sysbox VM Pod execution failed")
 		default:
-			virtualInstance.Status.Phase = "Creating"
+			virtualInstance.Status.Phase = PhaseCreating
 		}
 	} else {
-		virtualInstance.Status.Phase = "Creating"
+		virtualInstance.Status.Phase = PhaseCreating
 	}
 
-	var endpoints []labv1alpha1.VirtualInstanceAccessEndpoint
+	endpoints := make([]labv1alpha1.VirtualInstanceAccessEndpoint, 0, len(virtualInstance.Spec.Ports))
 	for _, p := range virtualInstance.Spec.Ports {
 		internalAddr := fmt.Sprintf("http://%s.%s.svc.cluster.local:%d", svc.Name, pod.Namespace, p.Port)
 		ep := labv1alpha1.VirtualInstanceAccessEndpoint{
@@ -577,7 +577,7 @@ func (r *VirtualInstanceReconciler) updateVirtualInstanceStatus(ctx context.Cont
 }
 
 func (r *VirtualInstanceReconciler) updateStatusFailed(ctx context.Context, virtualInstance *labv1alpha1.VirtualInstance, reason, message string) {
-	virtualInstance.Status.Phase = "Failed"
+	virtualInstance.Status.Phase = PhaseFailed
 	utils.SetCondition(&virtualInstance.Status.Conditions, "Ready", metav1.ConditionFalse, reason, message)
 	_ = r.Status().Update(ctx, virtualInstance)
 }
