@@ -3,17 +3,17 @@
 # ROLE COMMON: HẠ TẦNG VÀ CÁC TRÌNH ĐIỀU KHIỂN HỆ ĐIỀU HÀNH CHUNG
 # ==============================================================================
 - name: Check supported OS family
-  fail:
+  ansible.builtin.fail:
     msg: "This playbook currently supports Debian/Ubuntu-based systems only."
   when: ansible_os_family != "Debian"
 
 - name: Check systemd service manager
-  fail:
+  ansible.builtin.fail:
     msg: "This playbook requires systemd."
   when: ansible_service_mgr != "systemd"
 
 - name: Install required baseline packages
-  apt:
+  ansible.builtin.apt:
     name:
       - curl
       - ca-certificates
@@ -22,74 +22,81 @@
       - uidmap
       - jq
     state: present
-    update_cache: yes
+    update_cache: true
 
 - name: Load mandatory kernel modules
-  shell: |
-    modprobe overlay
-    modprobe br_netfilter
+  ansible.builtin.command:
+    cmd: modprobe {{ item }}
+  loop:
+    - overlay
+    - br_netfilter
   changed_when: false
 
 - name: Try to load shiftfs module (optional)
-  shell: |
-    modprobe shiftfs
-  register: shiftfs_modprobe
+  ansible.builtin.command:
+    cmd: modprobe shiftfs
+  register: common_shiftfs_modprobe
   changed_when: false
   failed_when: false
-  when: enable_shiftfs | bool
+  when: common_enable_shiftfs | bool
 
 - name: Check shiftfs module status
-  shell: |
-    lsmod | grep '^shiftfs' || true
-  register: shiftfs_check
+  ansible.builtin.shell:
+    cmd: lsmod | grep '^shiftfs' || true
+    executable: /bin/bash
+  register: common_shiftfs_check
   changed_when: false
-  when: enable_shiftfs | bool
+  when: common_enable_shiftfs | bool
 
 - name: Persist shiftfs module if available
-  copy:
+  ansible.builtin.copy:
     dest: /etc/modules-load.d/shiftfs.conf
     content: "shiftfs\n"
+    mode: "0644"
   when:
-    - enable_shiftfs | bool
-    - shiftfs_check.stdout is defined
-    - shiftfs_check.stdout != ""
+    - common_enable_shiftfs | bool
+    - common_shiftfs_check.stdout is defined
+    - common_shiftfs_check.stdout != ""
 
 - name: Configure sysctl for Kubernetes and User Namespaces (Sysbox prerequisite)
-  copy:
+  ansible.builtin.copy:
     dest: /etc/sysctl.d/99-k3s-sysbox.conf
     content: |
       net.bridge.bridge-nf-call-iptables = 1
       net.bridge.bridge-nf-call-ip6tables = 1
       net.ipv4.ip_forward = 1
       kernel.unprivileged_userns_clone = 1
+    mode: "0644"
 
 - name: Apply sysctl configuration immediately
-  shell: sysctl --system
+  ansible.builtin.command:
+    cmd: sysctl --system
   changed_when: false
 
 - name: Install LXCFS for container resource virtual display (optional)
-  apt:
+  ansible.builtin.apt:
     name: lxcfs
     state: present
-  when: enable_lxcfs | bool
+  when: common_enable_lxcfs | bool
 
 - name: Enable and start LXCFS service
-  systemd:
+  ansible.builtin.systemd:
     name: lxcfs
-    enabled: yes
+    enabled: true
     state: started
-  when: enable_lxcfs | bool
+  when: common_enable_lxcfs | bool
 
 - name: Create K3s configuration folder
-  file:
+  ansible.builtin.file:
     path: /etc/rancher/k3s
     state: directory
     mode: "0755"
 
 - name: Write default K3s config with UserNamespaces feature gate enabled
-  copy:
+  ansible.builtin.copy:
     dest: /etc/rancher/k3s/config.yaml
     content: |
       write-kubeconfig-mode: "0644"
       kubelet-arg:
         - "feature-gates=UserNamespacesSupport=true"
+    mode: "0644"

@@ -3,20 +3,21 @@
 # ROLE COMMON: TINH CHỈNH CONTAINERD DÀNH RIÊNG CHO SYSBOX
 # ==============================================================================
 - name: Wait for containerd config directory to be created by K3s
-  wait_for:
-    path: "{{ containerd_dir }}"
+  ansible.builtin.wait_for:
+    path: "{{ common_containerd_dir }}"
     state: present
     timeout: 120
 
 - name: Ensure containerd config template base header exists
-  copy:
-    dest: "{{ containerd_template }}"
+  ansible.builtin.copy:
+    dest: "{{ common_containerd_template }}"
     content: "{{ '{{ template \"base\" . }}' }}\n"
-    force: no
+    force: false
+    mode: "0644"
 
 - name: Inject sysbox-runc runtime and slow_chown option into containerd template
-  blockinfile:
-    path: "{{ containerd_template }}"
+  ansible.builtin.blockinfile:
+    path: "{{ common_containerd_template }}"
     marker: "# {mark} SYSBOX RUNTIME CONFIG"
     block: |
       [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.'sysbox-runc']
@@ -30,13 +31,13 @@
         slow_chown = true
 
 - name: Restart K3s Server service (on Master nodes) to reload containerd
-  systemd:
+  ansible.builtin.systemd:
     name: k3s
     state: restarted
   when: "'k3s_master' in group_names"
 
 - name: Restart K3s Agent service (on Worker nodes) to reload containerd
-  systemd:
+  ansible.builtin.systemd:
     name: k3s-agent
     state: restarted
   when: "'k3s_workers' in group_names"

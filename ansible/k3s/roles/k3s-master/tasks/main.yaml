@@ -3,64 +3,71 @@
 # ROLE K3S-MASTER: KHỞI TẠO MÁY CHỦ CONTROL PLANE VÀ TOKEN
 # ==============================================================================
 - name: Install K3s Control Plane (Server)
-  shell: |
-    curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="{{ k3s_version }}" sh -s - server
-  args:
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /tmp/k3s-install.sh
+    mode: "0755"
+
+- name: Run K3s installer script
+  ansible.builtin.command:
+    cmd: /tmp/k3s-install.sh server
     creates: /usr/local/bin/k3s
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
 
 - name: Ensure K3s server service is enabled and active
-  systemd:
+  ansible.builtin.systemd:
     name: k3s
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Wait for kubeconfig to be generated on Master node
-  wait_for:
+  ansible.builtin.wait_for:
     path: "{{ kubeconfig_remote }}"
     state: present
     timeout: 120
 
 - name: Wait for Master node to register in Ready condition
-  shell: |
-    k3s kubectl wait --for=condition=Ready node --all --timeout=180s
+  ansible.builtin.command:
+    cmd: k3s kubectl wait --for=condition=Ready node --all --timeout=180s
   changed_when: false
 
 - name: Extract K3s Node Token for Worker nodes cluster joining
-  slurp:
+  ansible.builtin.slurp:
     src: /var/lib/rancher/k3s/server/node-token
   register: node_token_b64
 
 - name: Set K3s Node Token and Master IP facts into Ansible Engine RAM
-  set_fact:
+  ansible.builtin.set_fact:
     k3s_node_token: "{{ node_token_b64['content'] | b64decode | trim }}"
     master_ip: "{{ k3s_api_host }}"
 
 - name: Create .kube directory in admin home folder
-  file:
+  ansible.builtin.file:
     path: "~/.kube"
     state: directory
-    mode: '0755'
-  become: no
+    mode: "0755"
+  become: false
 
 - name: Copy kubeconfig to admin home folder on Master node
-  copy:
+  ansible.builtin.copy:
     src: "{{ kubeconfig_remote }}"
     dest: "~/.kube/config"
-    remote_src: yes
+    remote_src: true
     owner: "{{ ansible_user | default(ansible_env.USER) }}"
-    mode: '0600'
-  become: yes
+    mode: "0600"
+  become: true
 
 - name: Fetch kubeconfig from Master to control station (./k3s.yaml)
-  fetch:
+  ansible.builtin.fetch:
     src: "{{ kubeconfig_remote }}"
     dest: ./k3s.yaml
-    flat: yes
+    flat: true
 
 - name: Replace 127.0.0.1 with Master external IP in local kubeconfig
   delegate_to: localhost
-  become: no
-  replace:
+  become: false
+  ansible.builtin.replace:
     path: ./k3s.yaml
     regexp: 'https://(127\.0\.0\.1|localhost):6443'
     replace: 'https://{{ master_ip }}:6443'

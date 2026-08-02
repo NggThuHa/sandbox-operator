@@ -11,38 +11,38 @@
 
 - name: Phase 1 - Chuẩn bị hạ tầng hệ điều hành chung trên toàn bộ cụm
   hosts: k3s_cluster
-  become: yes
+  become: true
   roles:
     - role: common
       tags: ['common', 'preflight']
 
 - name: Phase 2 - Khởi tạo máy chủ Kube-apiserver (Control Plane)
   hosts: k3s_master
-  become: yes
+  become: true
   roles:
     - role: k3s-master
       tags: ['master', 'control-plane']
 
 - name: Phase 3 - Khởi tạo dàn nhà xưởng Worker và kết nạp vào cụm Master
   hosts: k3s_workers
-  become: yes
+  become: true
   roles:
     - role: k3s-worker
       tags: ['worker', 'k3s-agent']
 
 - name: Phase 4 - Cấu hình động cơ Containerd & Sysbox-runc trên toàn bộ Node
   hosts: k3s_cluster
-  become: yes
+  become: true
   tasks:
     - name: Include containerd configuration tasks from common role
-      include_role:
+      ansible.builtin.include_role:
         name: common
         tasks_from: containerd
       tags: ['containerd', 'runtime']
 
 - name: Phase 5 - Triển khai Sysbox Engine & RuntimeClass cho toàn Cụm
   hosts: k3s_master
-  become: yes
+  become: true
   roles:
     - role: sysbox
       tags: ['sysbox', 'k8s-runtime']

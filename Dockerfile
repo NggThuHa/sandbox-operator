@@ -14,6 +14,9 @@ RUN go mod download
 # Copy the Go source (relies on .dockerignore to filter)
 COPY . .
 
+# Sync vendor/modules.txt to ensure consistency (## explicit markers) before build
+RUN go mod vendor
+
 # Build
 # the GOARCH has no default value to allow the binary to be built according to the host where the command
 # was called. For example, if we call make docker-build in a local env which has the Apple Silicon M1 SO

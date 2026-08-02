@@ -1,22 +1,35 @@
 ---
 # ==============================================================================
-# ROLE K3S-WORKER: CẢI ĐẶT AGENT VÀ GIA NHẬP VÀO MASTER
+# ROLE K3S-WORKER: CÀI ĐẶT AGENT VÀ GIA NHẬP VÀO MASTER
 # ==============================================================================
 # Chốt chặn an toàn: Điều kiện "when: 'k3s_master' not in group_names" đảm bảo
-# nếu bạn lỡ tay điền nhầm IP Master xuống cả mục [k3s_workers], Ansible sẽ tự 
+# nếu bạn lỡ tay điền nhầm IP Master xuống cả mục [k3s_workers], Ansible sẽ tự
 # động block không cho phép cài đè dịch vụ Worker Agent lên Control Plane.
 # ==============================================================================
 
+- name: Download K3s install script
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /tmp/k3s-install.sh
+    mode: "0755"
+  when: "'k3s_master' not in group_names"
+
 - name: Install K3s Agent (Worker) pointing to Control Plane node
-  shell: |
-    curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="{{ k3s_version }}" K3S_URL="https://{{ hostvars[groups['k3s_master'][0]]['master_ip'] | default(hostvars[groups['k3s_master'][0]]['ansible_host']) | default(groups['k3s_master'][0]) }}:6443" K3S_TOKEN="{{ hostvars[groups['k3s_master'][0]]['k3s_node_token'] }}" sh -s - agent
-  args:
+  ansible.builtin.command:
+    cmd: /tmp/k3s-install.sh agent
     creates: /usr/local/bin/k3s-agent
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+    K3S_URL: >-
+      https://{{ hostvars[groups['k3s_master'][0]]['master_ip']
+      | default(hostvars[groups['k3s_master'][0]]['ansible_host'])
+      | default(groups['k3s_master'][0]) }}:6443
+    K3S_TOKEN: "{{ hostvars[groups['k3s_master'][0]]['k3s_node_token'] }}"
   when: "'k3s_master' not in group_names"
 
 - name: Ensure K3s agent service is enabled and started on Worker nodes
-  systemd:
+  ansible.builtin.systemd:
     name: k3s-agent
-    enabled: yes
+    enabled: true
     state: started
   when: "'k3s_master' not in group_names"

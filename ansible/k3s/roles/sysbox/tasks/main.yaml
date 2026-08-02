@@ -3,22 +3,24 @@
 # ROLE SYSBOX: TRIỂN KHAI ĐỘNG CƠ CONTAINER-IN-CONTAINER VÀ RUNTIMECLASS
 # ==============================================================================
 - name: Wait for all cluster nodes (Master & Workers) to register as Ready in K8s
-  shell: |
-    k3s kubectl wait --for=condition=Ready node --all --timeout=300s
+  ansible.builtin.command:
+    cmd: k3s kubectl wait --for=condition=Ready node --all --timeout=300s
   changed_when: false
 
 - name: Label ALL cluster nodes for Sysbox automated installation
-  shell: |
-    k3s kubectl label nodes --all sysbox-install=yes --overwrite
+  ansible.builtin.command:
+    cmd: k3s kubectl label nodes --all sysbox-install=yes --overwrite
   changed_when: false
 
 - name: Apply Sysbox DaemonSet installer manifest
-  shell: |
-    k3s kubectl apply -f {{ sysbox_manifest_url }}
+  ansible.builtin.command:
+    cmd: k3s kubectl apply -f {{ sysbox_manifest_url }}
+  changed_when: true
 
 - name: Wait for Sysbox installer pods to converge in kube-system namespace
-  shell: |
-    k3s kubectl get pods -n kube-system | grep -i sysbox
+  ansible.builtin.shell:
+    cmd: k3s kubectl get pods -n kube-system | grep -i sysbox
+    executable: /bin/bash
   register: sysbox_pods
   retries: 30
   delay: 5
@@ -26,24 +28,23 @@
   changed_when: false
 
 - name: Wait for sysbox-runc binary to be materialized across systems
-  wait_for:
+  ansible.builtin.wait_for:
     path: /usr/bin/sysbox-runc
     state: present
     timeout: 600
 
 - name: Ensure Sysbox daemon systemd services are active
-  shell: |
-    systemctl is-active --quiet sysbox
-    systemctl is-active --quiet sysbox-fs
-    systemctl is-active --quiet sysbox-mgr
-  register: sysbox_services
-  retries: 30
-  delay: 5
-  until: sysbox_services.rc == 0
-  changed_when: false
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop:
+    - sysbox
+    - sysbox-fs
+    - sysbox-mgr
 
 - name: Create Sysbox RuntimeClass resource definition
-  copy:
+  ansible.builtin.copy:
     dest: /tmp/sysbox-runtimeclass.yaml
     content: |
       apiVersion: node.k8s.io/v1
@@ -51,29 +52,33 @@
       metadata:
         name: sysbox-runc
       handler: sysbox-runc
+    mode: "0644"
 
 - name: Apply Sysbox RuntimeClass into Kubernetes cluster
-  shell: |
-    k3s kubectl apply -f /tmp/sysbox-runtimeclass.yaml
+  ansible.builtin.command:
+    cmd: k3s kubectl apply -f /tmp/sysbox-runtimeclass.yaml
+  changed_when: true
 
 - name: Verify Traefik Ingress Controller availability
-  shell: |
-    k3s kubectl wait --namespace kube-system \
-      --for=condition=ready pod \
-      --selector=app.kubernetes.io/name=traefik \
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl wait --namespace kube-system
+      --for=condition=ready pod
+      --selector=app.kubernetes.io/name=traefik
       --timeout=180s
-  register: traefik_ready
+  register: sysbox_traefik_ready
   retries: 5
   delay: 10
-  until: traefik_ready.rc == 0
+  until: sysbox_traefik_ready.rc == 0
   changed_when: false
 
 - name: Display cluster readiness status and Ingress Classes
-  shell: |
-    k3s kubectl get nodes -o wide && k3s kubectl get ingressclass
-  register: cluster_summary
+  ansible.builtin.shell:
+    cmd: k3s kubectl get nodes -o wide && k3s kubectl get ingressclass
+    executable: /bin/bash
+  register: sysbox_cluster_summary
   changed_when: false
 
 - name: Print finalized Master/Worker cluster summary
-  debug:
-    var: cluster_summary.stdout_lines
+  ansible.builtin.debug:
+    var: sysbox_cluster_summary.stdout_lines
