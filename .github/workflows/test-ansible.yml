@@ -26,7 +26,7 @@ jobs:
 
       - name: Install Ansible, ansible-lint and Molecule
         run: |
-          pip install ansible ansible-lint "molecule[docker]" docker
+          pip install ansible ansible-lint molecule "molecule-plugins[docker]" docker
 
       - name: Syntax check all playbooks
         working-directory: ansible/k3s
