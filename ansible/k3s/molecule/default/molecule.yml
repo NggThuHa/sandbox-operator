@@ -21,10 +21,13 @@ provisioner:
   playbooks:
     converge: converge.yml
     verify: verify.yml
-  config_options:
-    defaults:
-      # Trỏ đúng thư mục roles tương đối từ molecule scenario directory
-      roles_path: ../../roles
+  # MOLECULE_SCENARIO_DIRECTORY được Molecule inject tự động, trỏ tới
+  # ansible/k3s/molecule/default/ → ../../roles = ansible/k3s/roles/
+  env:
+    ANSIBLE_ROLES_PATH: "${MOLECULE_SCENARIO_DIRECTORY}/../../roles"
+  options:
+    # Verbose để hiển thị lỗi syntax đầy đủ trong CI logs
+    v: true
   inventory:
     group_vars:
       all:
