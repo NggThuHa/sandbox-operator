@@ -1,6 +1,6 @@
 # 🚀 KubeEdu API — Cloud-Native Practical Lab & Sandbox Platform
 
-![Kubebuilder](https://img.shields.io/badge/Kubebuilder-v4-blue.svg) ![Kubernetes](https://img.shields.io/badge/Kubernetes-v1.30+-326ce5.svg) ![Go Version](https://img.shields.io/badge/Go-v1.24+-00ADD8.svg) ![Ansible](https://img.shields.io/badge/Ansible-Kubespray%20Style-EE0000.svg)
+![Kubebuilder](https://img.shields.io/badge/Kubebuilder-v4-blue.svg) ![Kubernetes](https://img.shields.io/badge/Kubernetes-v1.32+-326ce5.svg) ![Go Version](https://img.shields.io/badge/Go-v1.26+-00ADD8.svg) ![Ansible](https://img.shields.io/badge/Ansible-Kubespray%20Style-EE0000.svg)
 
 **KubeEdu API** là hệ thống nền tảng điện toán đám mây tự động hóa quản trị phòng thí nghiệm & Sandbox (Cloud-Native Lab Platform) tiêu chuẩn doanh nghiệp, được thiết kế chuyên biệt cho môi trường đào tạo thực thao (University Practical Labs, Coding Bootcamps, DevSecOps Cyber-Range). 
 
@@ -90,9 +90,9 @@ ansible-playbook cluster.yml
 ## 🛠️ Hướng Dẫn Phát Triển & Triển Khai Operator
 
 ### 1. Yêu cầu Tiền quyết (Prerequisites)
-* **Go:** `v1.24.6+`
+* **Go:** `v1.26.0+`
 * **Docker:** `17.03+`
-* **Kubernetes Cluster:** `v1.30+` (Cụm K3s tạo từ bước trên hoặc dàn Kind/Envtest để test local).
+* **Kubernetes Cluster:** `v1.32+` (Cụm K3s tạo từ bước trên hoặc dàn Kind/Envtest để test local).
 
 ### 2. Kiểm Thử & Kiểm Soát Ngữ Pháp Mã Nguồn (Testing & Linting)
 Trong quá trình bổ sung hoặc chỉnh sửa code Controller:
