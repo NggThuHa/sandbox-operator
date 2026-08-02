@@ -1,0 +1,33 @@
+---
+# molecule/default/molecule.yml
+# Chạy playbook common role trên container Ubuntu giả lập systemd
+driver:
+  name: docker
+
+platforms:
+  - name: k3s-node-test
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    # Container với systemd thật để test các tasks apt/systemd/sysctl
+    command: /lib/systemd/systemd
+    privileged: true
+    pre_build_image: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    tmpfs:
+      - /run
+      - /tmp
+
+provisioner:
+  name: ansible
+  playbooks:
+    converge: converge.yml
+  inventory:
+    group_vars:
+      all:
+        # Override các biến mặc định để bỏ qua kernel features không có trong Docker
+        enable_shiftfs: false
+        enable_lxcfs: false
+
+verifier:
+  name: ansible

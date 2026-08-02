@@ -1,0 +1,30 @@
+---
+# molecule/default/converge.yml
+# Chỉ test role common vì các role k3s-master/worker/sysbox cần kernel thật
+- name: Converge
+  hosts: all
+  become: true
+
+  pre_tasks:
+    # Trong Docker container không có kernel modules thật → skip modprobe
+    - name: Stub modprobe for Docker environment
+      copy:
+        dest: /usr/local/bin/modprobe
+        content: |
+          #!/bin/bash
+          echo "[STUB] modprobe $@ (skipped in Docker CI)" >&2
+          exit 0
+        mode: "0755"
+
+    # sysctl --system thường fail trong Docker → stub nó
+    - name: Stub sysctl for Docker environment
+      copy:
+        dest: /usr/local/bin/sysctl
+        content: |
+          #!/bin/bash
+          echo "[STUB] sysctl $@ (skipped in Docker CI)" >&2
+          exit 0
+        mode: "0755"
+
+  roles:
+    - role: common

@@ -1,0 +1,44 @@
+---
+# molecule/default/verify.yml
+# Xác minh kết quả sau khi converge chạy xong
+- name: Verify
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Verify required packages are installed
+      package:
+        name:
+          - curl
+          - ca-certificates
+          - jq
+        state: present
+
+    - name: Verify K3s config directory exists
+      stat:
+        path: /etc/rancher/k3s
+      register: k3s_dir
+      failed_when: not k3s_dir.stat.exists
+
+    - name: Verify K3s config file is written
+      stat:
+        path: /etc/rancher/k3s/config.yaml
+      register: k3s_config
+      failed_when: not k3s_config.stat.exists
+
+    - name: Verify sysctl config file is written
+      stat:
+        path: /etc/sysctl.d/99-k3s-sysbox.conf
+      register: sysctl_config
+      failed_when: not sysctl_config.stat.exists
+
+    - name: Show K3s config content for validation
+      command: cat /etc/rancher/k3s/config.yaml
+      register: k3s_config_content
+      changed_when: false
+
+    - name: Assert K3s config has UserNamespacesSupport flag
+      assert:
+        that:
+          - "'UserNamespacesSupport' in k3s_config_content.stdout"
+        fail_msg: "K3s config is missing UserNamespacesSupport feature gate"

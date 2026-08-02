@@ -1,0 +1,49 @@
+name: Ansible Tests
+
+on:
+  push:
+  pull_request:
+
+permissions: {}
+
+jobs:
+  ansible-test:
+    permissions:
+      contents: read
+    name: Run on Ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Ansible, ansible-lint and Molecule
+        run: |
+          pip install ansible ansible-lint "molecule[docker]" docker
+
+      - name: Syntax check all playbooks
+        working-directory: ansible/k3s
+        run: |
+          ansible-playbook cluster.yml \
+            -i "localhost," \
+            -e "ansible_connection=local" \
+            --syntax-check
+
+      - name: Run ansible-lint
+        working-directory: ansible/k3s
+        run: ansible-lint cluster.yml
+
+      - name: Run Molecule test (common role)
+        working-directory: ansible/k3s
+        env:
+          # Cho phép Molecule dùng Docker daemon của runner
+          DOCKER_HOST: unix:///var/run/docker.sock
+        run: |
+          molecule test -s default
