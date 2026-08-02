@@ -1,0 +1,16 @@
+---
+# ==============================================================================
+# GENERAL CLUSTER VARIABLES (Tương tự group_vars/all/all.yml trong Kubespray)
+# ==============================================================================
+
+# Phiên bản K3s cài đặt trên toàn bộ Node:
+k3s_version: "v1.32.5+k3s1"
+
+# Đường dẫn cấu hình K3s và Containerd:
+kubeconfig_remote: "/etc/rancher/k3s/k3s.yaml"
+containerd_dir: "/var/lib/rancher/k3s/agent/etc/containerd"
+containerd_template: "/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl"
+
+# Các module hạt nhân hệ điều hành hỗ trợ cho máy ảo Pod (Docker-in-Docker):
+enable_shiftfs: true
+enable_lxcfs: true

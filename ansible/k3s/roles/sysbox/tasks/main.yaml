@@ -1,0 +1,79 @@
+---
+# ==============================================================================
+# ROLE SYSBOX: TRIỂN KHAI ĐỘNG CƠ CONTAINER-IN-CONTAINER VÀ RUNTIMECLASS
+# ==============================================================================
+- name: Wait for all cluster nodes (Master & Workers) to register as Ready in K8s
+  shell: |
+    k3s kubectl wait --for=condition=Ready node --all --timeout=300s
+  changed_when: false
+
+- name: Label ALL cluster nodes for Sysbox automated installation
+  shell: |
+    k3s kubectl label nodes --all sysbox-install=yes --overwrite
+  changed_when: false
+
+- name: Apply Sysbox DaemonSet installer manifest
+  shell: |
+    k3s kubectl apply -f {{ sysbox_manifest_url }}
+
+- name: Wait for Sysbox installer pods to converge in kube-system namespace
+  shell: |
+    k3s kubectl get pods -n kube-system | grep -i sysbox
+  register: sysbox_pods
+  retries: 30
+  delay: 5
+  until: sysbox_pods.rc == 0
+  changed_when: false
+
+- name: Wait for sysbox-runc binary to be materialized across systems
+  wait_for:
+    path: /usr/bin/sysbox-runc
+    state: present
+    timeout: 600
+
+- name: Ensure Sysbox daemon systemd services are active
+  shell: |
+    systemctl is-active --quiet sysbox
+    systemctl is-active --quiet sysbox-fs
+    systemctl is-active --quiet sysbox-mgr
+  register: sysbox_services
+  retries: 30
+  delay: 5
+  until: sysbox_services.rc == 0
+  changed_when: false
+
+- name: Create Sysbox RuntimeClass resource definition
+  copy:
+    dest: /tmp/sysbox-runtimeclass.yaml
+    content: |
+      apiVersion: node.k8s.io/v1
+      kind: RuntimeClass
+      metadata:
+        name: sysbox-runc
+      handler: sysbox-runc
+
+- name: Apply Sysbox RuntimeClass into Kubernetes cluster
+  shell: |
+    k3s kubectl apply -f /tmp/sysbox-runtimeclass.yaml
+
+- name: Verify Traefik Ingress Controller availability
+  shell: |
+    k3s kubectl wait --namespace kube-system \
+      --for=condition=ready pod \
+      --selector=app.kubernetes.io/name=traefik \
+      --timeout=180s
+  register: traefik_ready
+  retries: 5
+  delay: 10
+  until: traefik_ready.rc == 0
+  changed_when: false
+
+- name: Display cluster readiness status and Ingress Classes
+  shell: |
+    k3s kubectl get nodes -o wide && k3s kubectl get ingressclass
+  register: cluster_summary
+  changed_when: false
+
+- name: Print finalized Master/Worker cluster summary
+  debug:
+    var: cluster_summary.stdout_lines

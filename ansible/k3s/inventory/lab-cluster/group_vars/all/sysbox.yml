@@ -1,0 +1,10 @@
+---
+# ==============================================================================
+# SYSBOX SPECIFIC VARIABLES (Tương tự group_vars/all/cri.yml trong Kubespray)
+# ==============================================================================
+
+# Kho chứa manifest tải chèn DaemonSet Sysbox-runc:
+sysbox_manifest_url: "https://raw.githubusercontent.com/nestybox/sysbox/master/sysbox-k8s-manifests/sysbox-install.yaml"
+
+# Tên RuntimeClass sử dụng trong cụm:
+sysbox_runtime_handler: "sysbox-runc"

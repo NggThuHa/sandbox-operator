@@ -1,0 +1,25 @@
+# This rule is not used by the project kubebuilder itself.
+# It is provided to allow the cluster admin to help manage permissions for users.
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: kubebuilder
+    app.kubernetes.io/managed-by: kustomize
+  name: virtualcluster-viewer-role
+rules:
+- apiGroups:
+  - lab.devops.toiyeuptit.com
+  resources:
+  - virtualclusters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - lab.devops.toiyeuptit.com
+  resources:
+  - virtualclusters/status
+  verbs:
+  - get

@@ -1,0 +1,5 @@
+---
+enable_shiftfs: true
+enable_lxcfs: true
+containerd_dir: "/var/lib/rancher/k3s/agent/etc/containerd"
+containerd_template: "/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl"

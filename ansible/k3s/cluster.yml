@@ -1,0 +1,48 @@
+---
+# ==============================================================================
+# PLAYBOOK CHÍNH TRIỂN KHAI TOÀN CỤM K3S & SYSBOX CLUSTER (KUBESPRAY STYLE)
+# ==============================================================================
+# Lệnh thực thi trực tiếp từ thư mục ansible/k3s:
+#   ansible-playbook -i inventory/lab-cluster/hosts.ini cluster.yml
+#
+# Hoặc vì đã cài đặt mặc định trong ansible.cfg, bạn chỉ cần gõ:
+#   ansible-playbook cluster.yml
+# ==============================================================================
+
+- name: Phase 1 - Chuẩn bị hạ tầng hệ điều hành chung trên toàn bộ cụm
+  hosts: k3s_cluster
+  become: yes
+  roles:
+    - role: common
+      tags: ['common', 'preflight']
+
+- name: Phase 2 - Khởi tạo máy chủ Kube-apiserver (Control Plane)
+  hosts: k3s_master
+  become: yes
+  roles:
+    - role: k3s-master
+      tags: ['master', 'control-plane']
+
+- name: Phase 3 - Khởi tạo dàn nhà xưởng Worker và kết nạp vào cụm Master
+  hosts: k3s_workers
+  become: yes
+  roles:
+    - role: k3s-worker
+      tags: ['worker', 'k3s-agent']
+
+- name: Phase 4 - Cấu hình động cơ Containerd & Sysbox-runc trên toàn bộ Node
+  hosts: k3s_cluster
+  become: yes
+  tasks:
+    - name: Include containerd configuration tasks from common role
+      include_role:
+        name: common
+        tasks_from: containerd
+      tags: ['containerd', 'runtime']
+
+- name: Phase 5 - Triển khai Sysbox Engine & RuntimeClass cho toàn Cụm
+  hosts: k3s_master
+  become: yes
+  roles:
+    - role: sysbox
+      tags: ['sysbox', 'k8s-runtime']

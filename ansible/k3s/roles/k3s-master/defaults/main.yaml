@@ -1,0 +1,4 @@
+---
+k3s_version: "v1.32.5+k3s1"
+kubeconfig_remote: "/etc/rancher/k3s/k3s.yaml"
+k3s_api_host: "{{ ansible_host | default(inventory_hostname) }}"

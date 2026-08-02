@@ -1,0 +1,66 @@
+---
+# ==============================================================================
+# ROLE K3S-MASTER: KHỞI TẠO MÁY CHỦ CONTROL PLANE VÀ TOKEN
+# ==============================================================================
+- name: Install K3s Control Plane (Server)
+  shell: |
+    curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="{{ k3s_version }}" sh -s - server
+  args:
+    creates: /usr/local/bin/k3s
+
+- name: Ensure K3s server service is enabled and active
+  systemd:
+    name: k3s
+    enabled: yes
+    state: started
+
+- name: Wait for kubeconfig to be generated on Master node
+  wait_for:
+    path: "{{ kubeconfig_remote }}"
+    state: present
+    timeout: 120
+
+- name: Wait for Master node to register in Ready condition
+  shell: |
+    k3s kubectl wait --for=condition=Ready node --all --timeout=180s
+  changed_when: false
+
+- name: Extract K3s Node Token for Worker nodes cluster joining
+  slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: node_token_b64
+
+- name: Set K3s Node Token and Master IP facts into Ansible Engine RAM
+  set_fact:
+    k3s_node_token: "{{ node_token_b64['content'] | b64decode | trim }}"
+    master_ip: "{{ k3s_api_host }}"
+
+- name: Create .kube directory in admin home folder
+  file:
+    path: "~/.kube"
+    state: directory
+    mode: '0755'
+  become: no
+
+- name: Copy kubeconfig to admin home folder on Master node
+  copy:
+    src: "{{ kubeconfig_remote }}"
+    dest: "~/.kube/config"
+    remote_src: yes
+    owner: "{{ ansible_user | default(ansible_env.USER) }}"
+    mode: '0600'
+  become: yes
+
+- name: Fetch kubeconfig from Master to control station (./k3s.yaml)
+  fetch:
+    src: "{{ kubeconfig_remote }}"
+    dest: ./k3s.yaml
+    flat: yes
+
+- name: Replace 127.0.0.1 with Master external IP in local kubeconfig
+  delegate_to: localhost
+  become: no
+  replace:
+    path: ./k3s.yaml
+    regexp: 'https://(127\.0\.0\.1|localhost):6443'
+    replace: 'https://{{ master_ip }}:6443'
