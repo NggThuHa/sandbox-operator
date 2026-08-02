@@ -108,13 +108,22 @@ make test
 ```
 
 ### 3. Đưa Operator Lên Cụm K3s Thực Chiến
+
+#### Cách 1: Cài đặt Siêu Tốc với một dòng lệnh (Single-Command Install)
+Dành cho người dùng cuối (End-users / Admin Cụm K8s), chỉ cần chạy duy nhất một lệnh thông qua file bundle `install.yaml` đã đóng gói sẵn trong kho chứa:
+```bash
+kubectl apply -f https://raw.githubusercontent.com/ngtukien/KubeEdu/main/dist/install.yaml
+```
+> 💡 *File `dist/install.yaml` được tự động sinh ra bằng lệnh `make build-installer IMG=...` và đã được đóng gói tự động hóa 100% trong chu trình GitHub Actions CI/CD Pipeline mỗi khi có phiên bản mới!*
+
+#### Cách 2: Triển khai cho Nhà Phát Triển từ Mã Nguồn (Developer Mode)
 **Bước 1: Biên dịch và đẩy Docker Image của Operator lên Registry:**
 ```bash
 export IMG="ghcr.io/toiyeuptit/kubeedu-api-operator:v1.0.0"
 make docker-build docker-push IMG=$IMG
 ```
 
-**Bước 2: Triển khai CRDs và Controller Manager vào Cụm:**
+**Bước 2: Triển khai trực tiếp bằng Kustomize / Makefile:**
 ```bash
 make install
 make deploy IMG=$IMG
