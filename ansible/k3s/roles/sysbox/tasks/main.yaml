@@ -19,7 +19,7 @@
 
 - name: Wait for Sysbox installer pods to converge in kube-system namespace
   ansible.builtin.shell:
-    cmd: k3s kubectl get pods -n kube-system | grep -i sysbox
+    cmd: set -o pipefail && k3s kubectl get pods -n kube-system | grep -i sysbox
     executable: /bin/bash
   register: sysbox_pods
   retries: 30

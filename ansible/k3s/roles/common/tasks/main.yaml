@@ -42,7 +42,7 @@
 
 - name: Check shiftfs module status
   ansible.builtin.shell:
-    cmd: lsmod | grep '^shiftfs' || true
+    cmd: set -o pipefail && lsmod | grep '^shiftfs' || true
     executable: /bin/bash
   register: common_shiftfs_check
   changed_when: false
