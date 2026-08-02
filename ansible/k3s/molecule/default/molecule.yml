@@ -1,13 +1,11 @@
 ---
 # molecule/default/molecule.yml
-# Chạy playbook common role trên container Ubuntu giả lập systemd
 driver:
   name: docker
 
 platforms:
   - name: k3s-node-test
     image: geerlingguy/docker-ubuntu2204-ansible:latest
-    # Container với systemd thật để test các tasks apt/systemd/sysctl
     command: /lib/systemd/systemd
     privileged: true
     pre_build_image: true
@@ -22,12 +20,27 @@ provisioner:
   name: ansible
   playbooks:
     converge: converge.yml
+    verify: verify.yml
+  config_options:
+    defaults:
+      # Trỏ đúng thư mục roles tương đối từ molecule scenario directory
+      roles_path: ../../roles
   inventory:
     group_vars:
       all:
-        # Override các biến mặc định để bỏ qua kernel features không có trong Docker
-        enable_shiftfs: false
-        enable_lxcfs: false
+        common_enable_shiftfs: false
+        common_enable_lxcfs: false
+
+# Bỏ qua dependency và cleanup vì không có requirements.yml hay cleanup.yml
+scenario:
+  test_sequence:
+    - destroy
+    - syntax
+    - create
+    - converge
+    - idempotence
+    - verify
+    - destroy
 
 verifier:
   name: ansible
