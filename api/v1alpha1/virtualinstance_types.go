@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,8 +35,9 @@ type VirtualInstanceResourceLimit struct {
 
 // VirtualInstanceResources gom nhóm tài nguyên tính toán của VirtualInstance
 type VirtualInstanceResources struct {
-	CPU    VirtualInstanceResourceLimit `json:"cpu,omitempty"`
-	Memory VirtualInstanceResourceLimit `json:"memory,omitempty"`
+	CPU              VirtualInstanceResourceLimit `json:"cpu,omitempty"`
+	Memory           VirtualInstanceResourceLimit `json:"memory,omitempty"`
+	EphemeralStorage VirtualInstanceResourceLimit `json:"ephemeralStorage,omitempty"`
 }
 
 // VirtualInstanceRootVolume định nghĩa ổ đĩa chứa hệ điều hành của Sysbox
@@ -70,12 +72,13 @@ type VirtualInstancePort struct {
 
 // VirtualInstanceSpec định nghĩa cấu hình của một máy ảo
 type VirtualInstanceSpec struct {
-	VirtualClusterRef string                   `json:"virtualClusterRef"`
-	Image             string                   `json:"image"`
-	RuntimeClassName  string                   `json:"runtimeClassName,omitempty"`
-	Resources         VirtualInstanceResources `json:"resources,omitempty"`
-	Storage           VirtualInstanceStorage   `json:"storage,omitempty"`
-	Ports             []VirtualInstancePort    `json:"ports,omitempty"`
+	VirtualClusterRef string                        `json:"virtualClusterRef"`
+	Image             string                        `json:"image"`
+	ImagePullSecrets  []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+	Hostname          string                        `json:"hostname,omitempty"`
+	Resources         VirtualInstanceResources      `json:"resources,omitempty"`
+	Storage           VirtualInstanceStorage        `json:"storage,omitempty"`
+	Ports             []VirtualInstancePort         `json:"ports,omitempty"`
 }
 
 // ============================================================================

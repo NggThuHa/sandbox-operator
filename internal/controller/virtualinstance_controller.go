@@ -39,6 +39,10 @@ import (
 	"github.com/NguyenTuKien/TYP-Operator/internal/utils"
 )
 
+const (
+	SysboxRuntimeClass = "sysbox-runc"
+)
+
 // VirtualInstanceReconciler đóng vai trò là "Người vận hành máy ảo".
 // Lắp ráp Pod (Sysbox runtime), chuẩn bị ổ cứng (PVC), cấu hình dịch vụ mạng và tổng hợp danh sách URL bảo mật HTTPS.
 type VirtualInstanceReconciler struct {
@@ -302,12 +306,26 @@ func (r *VirtualInstanceReconciler) reconcileSysboxPod(ctx context.Context, virt
 		pod.Labels[utils.LabelVirtualInstance] = virtualInstance.Name
 		pod.Labels["app"] = podName
 
-		runtimeClass := virtualInstance.Spec.RuntimeClassName
-		if runtimeClass == "" {
-			runtimeClass = "sysbox-runc"
+		enableServiceLinks := false
+		pod.Spec.EnableServiceLinks = &enableServiceLinks
+
+		hostUsers := false
+		pod.Spec.HostUsers = &hostUsers
+
+		if pod.Spec.NodeSelector == nil {
+			pod.Spec.NodeSelector = make(map[string]string)
 		}
+		pod.Spec.NodeSelector["sysbox-install"] = "yes"
+
+		runtimeClass := SysboxRuntimeClass
 		pod.Spec.RuntimeClassName = &runtimeClass
-		pod.Spec.RestartPolicy = corev1.RestartPolicyAlways
+		pod.Spec.RestartPolicy = corev1.RestartPolicyNever
+		if virtualInstance.Spec.Hostname != "" {
+			pod.Spec.Hostname = virtualInstance.Spec.Hostname
+		}
+		if len(virtualInstance.Spec.ImagePullSecrets) > 0 {
+			pod.Spec.ImagePullSecrets = virtualInstance.Spec.ImagePullSecrets
+		}
 
 		var volumes []corev1.Volume
 		var mounts []corev1.VolumeMount
@@ -330,6 +348,35 @@ func (r *VirtualInstanceReconciler) reconcileSysboxPod(ctx context.Context, virt
 			idx++
 		}
 
+		// Mount lxcfs proc filesystem for accurate resource reporting and isolation in Sysbox containers
+		hostPathTypeFile := corev1.HostPathFile
+		lxcfsMounts := []struct {
+			name      string
+			mountPath string
+			hostPath  string
+		}{
+			{"lxcfs-proc-cpuinfo", "/proc/cpuinfo", "/var/lib/lxcfs/proc/cpuinfo"},
+			{"lxcfs-proc-meminfo", "/proc/meminfo", "/var/lib/lxcfs/proc/meminfo"},
+			{"lxcfs-proc-diskstats", "/proc/diskstats", "/var/lib/lxcfs/proc/diskstats"},
+			{"lxcfs-proc-swaps", "/proc/swaps", "/var/lib/lxcfs/proc/swaps"},
+			{"lxcfs-proc-uptime", "/proc/uptime", "/var/lib/lxcfs/proc/uptime"},
+		}
+		for _, l := range lxcfsMounts {
+			volumes = append(volumes, corev1.Volume{
+				Name: l.name,
+				VolumeSource: corev1.VolumeSource{
+					HostPath: &corev1.HostPathVolumeSource{
+						Path: l.hostPath,
+						Type: &hostPathTypeFile,
+					},
+				},
+			})
+			mounts = append(mounts, corev1.VolumeMount{
+				Name:      l.name,
+				MountPath: l.mountPath,
+			})
+		}
+
 		var containerPorts []corev1.ContainerPort
 		for _, p := range virtualInstance.Spec.Ports {
 			containerPorts = append(containerPorts, corev1.ContainerPort{
@@ -345,12 +392,12 @@ func (r *VirtualInstanceReconciler) reconcileSysboxPod(ctx context.Context, virt
 		}
 
 		container := corev1.Container{
-			Name:            "sysbox-vm",
+			Name:            "main",
 			Image:           image,
 			ImagePullPolicy: corev1.PullIfNotPresent,
 			VolumeMounts:    mounts,
 			Ports:           containerPorts,
-			Command:         []string{"/bin/sh", "-c", "while true; do sleep 30; done;"},
+			Command:         []string{"/sbin/init"},
 		}
 
 		resList := corev1.ResourceRequirements{
@@ -368,6 +415,14 @@ func (r *VirtualInstanceReconciler) reconcileSysboxPod(ctx context.Context, virt
 		}
 		if !virtualInstance.Spec.Resources.Memory.Limit.IsZero() {
 			resList.Limits[corev1.ResourceMemory] = virtualInstance.Spec.Resources.Memory.Limit
+		}
+		if !virtualInstance.Spec.Resources.EphemeralStorage.Request.IsZero() {
+			resList.Requests[corev1.ResourceEphemeralStorage] = virtualInstance.Spec.Resources.EphemeralStorage.Request
+		}
+		if !virtualInstance.Spec.Resources.EphemeralStorage.Limit.IsZero() {
+			resList.Limits[corev1.ResourceEphemeralStorage] = virtualInstance.Spec.Resources.EphemeralStorage.Limit
+		} else if !virtualInstance.Spec.Storage.Root.Size.IsZero() {
+			resList.Limits[corev1.ResourceEphemeralStorage] = virtualInstance.Spec.Storage.Root.Size
 		}
 		if len(resList.Requests) > 0 || len(resList.Limits) > 0 {
 			container.Resources = resList
@@ -470,6 +525,8 @@ func (r *VirtualInstanceReconciler) reconcileIngress(ctx context.Context, virtua
 		ingress.Annotations["cert-manager.io/cluster-issuer"] = "letsencrypt-prod"
 		ingress.Annotations["nginx.ingress.kubernetes.io/ssl-redirect"] = "true"
 		ingress.Annotations["nginx.ingress.kubernetes.io/proxy-body-size"] = "1000m"
+		ingress.Annotations["nginx.ingress.kubernetes.io/proxy-read-timeout"] = "3600"
+		ingress.Annotations["nginx.ingress.kubernetes.io/proxy-send-timeout"] = "3600"
 
 		ingClass := utils.GetIngressClassName()
 		ingress.Spec.IngressClassName = &ingClass

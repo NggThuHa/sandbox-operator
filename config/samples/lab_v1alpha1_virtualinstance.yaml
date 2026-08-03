@@ -8,7 +8,9 @@ metadata:
 spec:
   virtualClusterRef: virtualcluster-sample
   image: ubuntu:24.04
-  runtimeClassName: sysbox-runc
+  # imagePullSecrets:
+  #   - name: my-private-registry-secret
+  hostname: ubuntu-vm
   resources:
     cpu:
       request: "500m"

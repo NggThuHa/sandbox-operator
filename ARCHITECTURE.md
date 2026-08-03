@@ -111,11 +111,13 @@ spec:
   # Liên kết máy ảo này vào VirtualCluster nào (Operator sẽ tự động đẩy Pod vào Namespace tương ứng)
   virtualClusterRef: "sample-virtualcluster"
   
-  # Cấu hình Container Runtime
+  # Cấu hình Máy ảo
   image: "sysbox-focal-docker:latest"
-  runtimeClassName: "sysbox-runc"
+  hostname: "controlplane"             # Tùy chỉnh hostname bên trong máy ảo
+  imagePullSecrets:
+    - name: "regcred"                  # Secret để pull image từ registry private (nếu cần)
   
-  # TÀI NGUYÊN TÍNH TOÁN
+  # TÀI NGUYÊN TÍNH TOÁN & DISK QUOTA
   resources:
     cpu:
       request: "500m"
@@ -123,6 +125,8 @@ spec:
     memory:
       request: "1Gi"
       limit: "2Gi"
+    ephemeralStorage:                  # Giới hạn dung lượng rác/tạm trên RootFS của Node
+      limit: "10Gi"
 
   storage:
     # Ổ đĩa root (OS) mặc định dùng local để boot nhanh và I/O cao cho Sysbox Docker engine
@@ -330,3 +334,291 @@ func (r *VirtualInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
   // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
   // +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
   ```
+
+---
+
+# 4. Chi tiết các Tài nguyên Bản địa (Native K8s Manifests) được Operator tạo ra
+
+Khi Backend hoặc người quản trị khởi tạo các đối tượng CRD (`VirtualCluster` và `VirtualInstance`), **TYP-Operator** sẽ tự động dịch chuyển và quản trị các tài nguyên chuẩn mực dưới tầng Kubernetes:
+
+## 4.1. Nhóm Tài nguyên cấp Cụm (Sinh ra từ `VirtualCluster`)
+
+Khi một `VirtualCluster` được khởi tạo, Operator sẽ quy hoạch một vùng cách ly hoàn chỉnh trong hệ thống Kubernetes, bao gồm:
+
+### 4.1.1. Namespace (Vùng cách ly phòng lab)
+Mọi đối tượng thuộc cụm sẽ được giam giữ gọn gàng trong một Namespace riêng biệt mang nhãn từ đơn đăng ký Lab/Session/Student:
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-virtualcluster-sample              # Mã định danh Namespace động (SHA-1 nếu vượt 63 ký tự)
+  labels:
+    app.kubernetes.io/managed-by: typ-operator
+    lab.devops.toiyeuptit.com/virtual-cluster: virtualcluster-sample
+    student_id: "student-01"                   # Tự động kế thừa các nhãn student_, lab_, session_ từ Cụm
+    session_id: "session-01"
+    lab_id: "lab-01"
+```
+
+### 4.1.2. ResourceQuota (Hàng rào Ngân sách Tài nguyên & Lưu trữ)
+Để đảm bảo một cụm Lab không tiêu hao vượt mức tài nguyên chung, Operator dịch thông số `spec.quota` thành một `ResourceQuota` áp đặt lên Namespace:
+```yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: lab-resource-quota
+  namespace: lab-virtualcluster-sample
+spec:
+  hard:
+    # Quota Tính toán
+    limits.cpu: "4"
+    requests.cpu: "4"
+    limits.memory: "8Gi"
+    requests.memory: "8Gi"
+    
+    # Quota Số lượng Đối tượng
+    pods: "15"
+    services: "5"
+    
+    # Quota Ổ cứng theo từng StorageClass
+    local-path.storageclass.storage.k8s.io/requests.storage: "50Gi"    # Quota đĩa local
+    longhorn.storageclass.storage.k8s.io/requests.storage: "10Gi"      # Quota đĩa network
+```
+
+### 4.1.3. NetworkPolicy (Tường lửa Giao thoa Mạng)
+Căn cứ vào trường `spec.network.type`, Operator sinh ra một bản tường lửa cho toàn bộ các Pod/máy ảo bên trong Namespace:
+
+#### 1. Chế độ `isolate` (Cô lập tuyệt đối - Cấm mọi luồng Ingress):
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lab-network-policy
+  namespace: lab-virtualcluster-sample
+spec:
+  podSelector: {}                       # Áp dụng lên mọi máy ảo trong Namespace
+  policyTypes:
+    - Ingress
+  ingress: []                           # Mảng rỗng = Chặn đứng mọi lưu lượng đến
+```
+
+#### 2. Chế độ `internal` (Mạng nội bộ giữa các máy ảo trong phòng Lab):
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lab-network-policy
+  namespace: lab-virtualcluster-sample
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}               # Chỉ cho phép luồng từ các Pod cùng Namespace
+```
+
+#### 3. Chế độ `external` (Mở kết nối cho phép truy cập từ Ingress / Web Terminal):
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lab-network-policy
+  namespace: lab-virtualcluster-sample
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from: []                          # Cho phép luồng từ bộ định tuyến ngoại tuyến (Ingress Controller)
+```
+
+---
+
+## 4.2. Nhóm Tài nguyên cấp Máy ảo (Sinh ra từ `VirtualInstance`)
+
+Khi khởi tạo một đối tượng `VirtualInstance` trong cụm Lab có sẵn, Operator sẽ tự động lắp ráp bộ tứ tài nguyên workload dưới đây:
+
+### 4.2.1. PersistentVolumeClaim (Ổ cứng Root và Data)
+Operator tự động phân tách cấu hình `storage` thành các PVC tương ứng, gán tên chuẩn hóa và liên kết chính xác nhãn quản trị:
+```yaml
+# 1a. Ổ đĩa gốc cho hệ thống container bên trong (Root Volume)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: virtualinstance-sample-root-pvc
+  namespace: lab-virtualcluster-sample
+  labels:
+    app.kubernetes.io/managed-by: typ-operator
+    lab.devops.toiyeuptit.com/virtual-cluster: virtualcluster-sample
+    lab.devops.toiyeuptit.com/virtual-instance: virtualinstance-sample
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path             # Chuyển đổi từ type: local
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# 1b. Ổ đĩa gắn kèm (Data Volume)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: virtualinstance-sample-docker-data-pvc
+  namespace: lab-virtualcluster-sample
+  labels:
+    app.kubernetes.io/managed-by: typ-operator
+    lab.devops.toiyeuptit.com/virtual-cluster: virtualcluster-sample
+    lab.devops.toiyeuptit.com/virtual-instance: virtualinstance-sample
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn               # Chuyển đổi từ type: network
+  resources:
+    requests:
+      storage: 20Gi
+```
+
+### 4.2.2. Pod (Máy ảo Docker-in-Docker chạy Sysbox Runtime)
+Cấu hình Pod được Operator lắp ráp với đầy đủ các thuộc tính bảo mật Sysbox, cô lập User-Namespace và chia sẻ thông số từ `lxcfs`:
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: virtualinstance-sample-sysbox
+  namespace: lab-virtualcluster-sample
+  labels:
+    app: virtualinstance-sample-sysbox
+    app.kubernetes.io/managed-by: typ-operator
+    lab.devops.toiyeuptit.com/virtual-cluster: virtualcluster-sample
+    lab.devops.toiyeuptit.com/virtual-instance: virtualinstance-sample
+spec:
+  enableServiceLinks: false                  # Tắt tự động mount env biến môi trường K8s
+  hostUsers: false                           # Bảo mật User-Namespace của Sysbox
+  hostname: controlplane                     # Tùy chỉnh hostname theo trường spec.hostname
+  runtimeClassName: sysbox-runc              # Runtime engine của Sysbox
+  restartPolicy: Never                       # Vòng đời không tự khởi tạo vô định
+  nodeSelector:
+    sysbox-install: "yes"                    # Bắt buộc lên kế hoạch trên node có cài sysbox
+  imagePullSecrets:
+    - name: regcred                          # Hỗ trợ pull image từ private registry
+  containers:
+    - name: main                             # Container gốc của máy ảo
+      image: ubuntu:24.04
+      imagePullPolicy: IfNotPresent
+      command:
+        - /sbin/init                         # Chạy systemd chuẩn cho môi trường Sysbox
+      ports:
+        - name: terminal
+          containerPort: 7681
+          protocol: TCP
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "512Mi"
+        limits:
+          cpu: "1"
+          memory: "1Gi"
+          ephemeral-storage: "10Gi"          # Quota bảo vệ ổ cứng Node vật lý
+      volumeMounts:
+        # Mount các ổ cứng PVC thực
+        - name: vol-0
+          mountPath: /var/lib/docker
+        # Mount toàn bộ các điểm báo cáo thông lượng LXCFS từ Host vào /proc
+        - name: lxcfs-proc-cpuinfo
+          mountPath: /proc/cpuinfo
+        - name: lxcfs-proc-meminfo
+          mountPath: /proc/meminfo
+        - name: lxcfs-proc-diskstats
+          mountPath: /proc/diskstats
+        - name: lxcfs-proc-swaps
+          mountPath: /proc/swaps
+        - name: lxcfs-proc-uptime
+          mountPath: /proc/uptime
+  volumes:
+    - name: vol-0
+      persistentVolumeClaim:
+        claimName: virtualinstance-sample-root-pvc
+    - name: lxcfs-proc-cpuinfo
+      hostPath:
+        path: /var/lib/lxcfs/proc/cpuinfo
+        type: File
+    - name: lxcfs-proc-meminfo
+      hostPath:
+        path: /var/lib/lxcfs/proc/meminfo
+        type: File
+    - name: lxcfs-proc-diskstats
+      hostPath:
+        path: /var/lib/lxcfs/proc/diskstats
+        type: File
+    - name: lxcfs-proc-swaps
+      hostPath:
+        path: /var/lib/lxcfs/proc/swaps
+        type: File
+    - name: lxcfs-proc-uptime
+      hostPath:
+        path: /var/lib/lxcfs/proc/uptime
+        type: File
+```
+
+### 4.2.3. Service (Điểm kết nối mạng nội bộ ClusterIP)
+Tạo ra IP tĩnh và định danh DNS ổn định, phục vụ cho lưu lượng trong cụm Lab và làm Backend bắt buộc cho Ingress:
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: virtualinstance-sample-svc
+  namespace: lab-virtualcluster-sample
+  labels:
+    app.kubernetes.io/managed-by: typ-operator
+    lab.devops.toiyeuptit.com/virtual-cluster: virtualcluster-sample
+    lab.devops.toiyeuptit.com/virtual-instance: virtualinstance-sample
+spec:
+  type: ClusterIP
+  selector:
+    app: virtualinstance-sample-sysbox         # Liên kết khớp tuyệt đối với Pod
+  ports:
+    - name: terminal
+      port: 8080
+      targetPort: 7681
+      protocol: TCP
+```
+
+### 4.2.4. Ingress (Cổng kết nối SSL HTTPS ngoài cụm)
+Chỉ khởi tạo khi có ít nhất 1 Port đặt `expose: true`. Tích hợp Cert-Manager để tự động xin chứng chỉ số Let's Encrypt và hỗ trợ kết nối WebSocket WSS cho Terminal:
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: virtualinstance-sample-ingress
+  namespace: lab-virtualcluster-sample
+  labels:
+    app.kubernetes.io/managed-by: typ-operator
+    lab.devops.toiyeuptit.com/virtual-cluster: virtualcluster-sample
+    lab.devops.toiyeuptit.com/virtual-instance: virtualinstance-sample
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod             # Xin chứng chỉ Let's Encrypt
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"             # Bắt buộc chuyển sang HTTPS
+    nginx.ingress.kubernetes.io/proxy-body-size: "1000m"         # Cho phép upload tệp lớn lên máy ảo
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"       # Giữ kết nối Web Terminal/WebSocket lên tới 1 giờ
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        # Tự động kiến tạo tên miền định danh cho sinh viên
+        - virtualinstance-sample.virtualcluster-sample.devops.toiyeuptit.com
+      secretName: virtualinstance-sample-tls-secret
+  rules:
+    - host: virtualinstance-sample.virtualcluster-sample.devops.toiyeuptit.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: virtualinstance-sample-svc                 # Trỏ thẳng về Service
+                port:
+                  number: 8080
+```

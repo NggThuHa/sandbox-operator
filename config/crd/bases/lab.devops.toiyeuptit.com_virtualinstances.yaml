@@ -55,8 +55,28 @@ spec:
           spec:
             description: VirtualInstanceSpec định nghĩa cấu hình của một máy ảo
             properties:
+              hostname:
+                type: string
               image:
                 type: string
+              imagePullSecrets:
+                items:
+                  description: |-
+                    LocalObjectReference contains enough information to let you locate the
+                    referenced object inside the same namespace.
+                  properties:
+                    name:
+                      default: ""
+                      description: |-
+                        Name of the referent.
+                        This field is effectively required, but due to backwards compatibility is
+                        allowed to be empty. Instances of this type with an empty value here are
+                        almost certainly wrong.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      type: string
+                  type: object
+                  x-kubernetes-map-type: atomic
+                type: array
               ports:
                 items:
                   description: VirtualInstancePort định nghĩa các cổng mạng cần mở
@@ -99,6 +119,23 @@ spec:
                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                         x-kubernetes-int-or-string: true
                     type: object
+                  ephemeralStorage:
+                    description: VirtualInstanceResourceLimit định nghĩa CPU/Memory
+                      request và limit
+                    properties:
+                      limit:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      request:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                    type: object
                   memory:
                     description: VirtualInstanceResourceLimit định nghĩa CPU/Memory
                       request và limit
@@ -117,8 +154,6 @@ spec:
                         x-kubernetes-int-or-string: true
                     type: object
                 type: object
-              runtimeClassName:
-                type: string
               storage:
                 description: VirtualInstanceStorage gom cấu hình lưu trữ
                 properties:
