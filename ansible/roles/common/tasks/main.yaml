@@ -41,19 +41,19 @@
     state: present
     update_cache: true
     install_recommends: true
-  register: kernel_upgrade
+  register: common_kernel_upgrade
   when:
     - ansible_distribution == "Ubuntu"
     - ansible_distribution_version == "20.04"
     - ansible_kernel is version('5.7', '<')
     - ansible_virtualization_type | default('') != "docker"
 
-- name: Reboot server immediately after kernel upgrade
+- name: Reboot server immediately after kernel upgrade # noqa: no-handler
   ansible.builtin.reboot:
     msg: "Rebooting to activate upgraded HWE kernel for Sysbox compatibility"
     reboot_timeout: 600
   when:
-    - kernel_upgrade.changed | default(false)
+    - common_kernel_upgrade.changed | default(false)
 
 # ------------------------------------------------------------------------------
 # 3. KIỂM TRA VÀ BẢO TRỤ CGROUP V2 (HẠ TẦNG KÉP TỪ CGROUP V1 -> V2)
@@ -61,7 +61,7 @@
 - name: Check current cgroup filesystem version
   ansible.builtin.command:
     cmd: stat -fc %T /sys/fs/cgroup
-  register: cgroup_fs_check
+  register: common_cgroup_fs_check
   changed_when: false
   failed_when: false
   when: ansible_virtualization_type | default('') != "docker"
@@ -71,11 +71,11 @@
     path: /etc/default/grub
     regexp: '^(GRUB_CMDLINE_LINUX=".*)"$'
     replace: '\1 systemd.unified_cgroup_hierarchy=1"'
-  register: grub_cgroup_update
+  register: common_grub_cgroup_update
   when:
     - ansible_virtualization_type | default('') != "docker"
-    - cgroup_fs_check.stdout is defined
-    - cgroup_fs_check.stdout == "tmpfs"
+    - common_cgroup_fs_check.stdout is defined
+    - common_cgroup_fs_check.stdout == "tmpfs"
   failed_when: false
 
 - name: Fallback append cgroup v2 if GRUB_CMDLINE_LINUX is completely blank
@@ -83,26 +83,27 @@
     path: /etc/default/grub
     regexp: '^GRUB_CMDLINE_LINUX=""$'
     line: 'GRUB_CMDLINE_LINUX="systemd.unified_cgroup_hierarchy=1"'
-  register: grub_cgroup_append
+  register: common_grub_cgroup_append
   when:
     - ansible_virtualization_type | default('') != "docker"
-    - cgroup_fs_check.stdout is defined
-    - cgroup_fs_check.stdout == "tmpfs"
-    - not (grub_cgroup_update.changed | default(false))
+    - common_cgroup_fs_check.stdout is defined
+    - common_cgroup_fs_check.stdout == "tmpfs"
+    - not (common_grub_cgroup_update.changed | default(false))
   failed_when: false
 
-- name: Update GRUB bootloader configuration
+- name: Update GRUB bootloader configuration # noqa: no-handler
   ansible.builtin.command:
     cmd: update-grub
+  changed_when: true
   when:
-    - (grub_cgroup_update.changed | default(false)) or (grub_cgroup_append.changed | default(false))
+    - (common_grub_cgroup_update.changed | default(false)) or (common_grub_cgroup_append.changed | default(false))
 
-- name: Reboot server to activate cgroup v2 hierarchy
+- name: Reboot server to activate cgroup v2 hierarchy # noqa: no-handler
   ansible.builtin.reboot:
     msg: "Rebooting node to activate cgroup v2 hierarchy (cgroup2fs)"
     reboot_timeout: 600
   when:
-    - (grub_cgroup_update.changed | default(false)) or (grub_cgroup_append.changed | default(false))
+    - (common_grub_cgroup_update.changed | default(false)) or (common_grub_cgroup_append.changed | default(false))
 
 # ------------------------------------------------------------------------------
 # 4. CÀI ĐẶT GÓI HỖ TRỢ NỀN TẢNG & LOAD KERNEL MODULES

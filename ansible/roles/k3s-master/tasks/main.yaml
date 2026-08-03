@@ -35,12 +35,12 @@
 - name: Extract K3s Node Token for Worker nodes cluster joining
   ansible.builtin.slurp:
     src: /var/lib/rancher/k3s/server/node-token
-  register: node_token_b64
+  register: k3s_master_token_b64
 
 - name: Set K3s Node Token and Master IP facts into Ansible Engine RAM
   ansible.builtin.set_fact:
-    k3s_node_token: "{{ node_token_b64['content'] | b64decode | trim }}"
-    master_ip: "{{ k3s_api_host }}"
+    k3s_node_token: "{{ k3s_master_token_b64['content'] | b64decode | trim }}"
+    k3s_master_ip: "{{ k3s_api_host }}"
 
 - name: Create .kube directory in admin home folder
   ansible.builtin.file:
@@ -70,4 +70,4 @@
   ansible.builtin.replace:
     path: ./k3s.yaml
     regexp: 'https://(127\.0\.0\.1|localhost):6443'
-    replace: 'https://{{ master_ip }}:6443'
+    replace: 'https://{{ k3s_master_ip }}:6443'

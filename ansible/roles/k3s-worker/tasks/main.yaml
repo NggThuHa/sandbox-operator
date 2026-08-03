@@ -21,7 +21,7 @@
   environment:
     INSTALL_K3S_VERSION: "{{ k3s_version }}"
     K3S_URL: >-
-      https://{{ hostvars[groups['k8s_master'][0]]['master_ip']
+      https://{{ hostvars[groups['k8s_master'][0]]['k3s_master_ip']
       | default(hostvars[groups['k8s_master'][0]]['ansible_host'])
       | default(groups['k8s_master'][0]) }}:6443
     K3S_TOKEN: "{{ hostvars[groups['k8s_master'][0]]['k3s_node_token'] }}"

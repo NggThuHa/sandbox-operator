@@ -33,7 +33,7 @@
     replace: '\1SystemdCgroup = true'
   register: containerd_cgroup_update
 
-- name: Restart and enable containerd service
+- name: Restart and enable containerd service # noqa: no-handler
   ansible.builtin.systemd:
     name: containerd
     state: restarted

@@ -5,7 +5,7 @@
 - name: Check if Kubernetes control-plane is already initialized
   ansible.builtin.stat:
     path: /etc/kubernetes/admin.conf
-  register: kubeadmin_conf_stat
+  register: kubeadm_master_conf_stat
 
 - name: Render kubeadm init configuration file
   ansible.builtin.copy:
@@ -26,12 +26,12 @@
       kind: KubeletConfiguration
       cgroupDriver: systemd
     mode: "0644"
-  when: not kubeadmin_conf_stat.stat.exists
+  when: not kubeadm_master_conf_stat.stat.exists
 
 - name: Initialize Kubernetes cluster using kubeadm
   ansible.builtin.command:
     cmd: "kubeadm init --config {{ kubeadm_config_path }}"
-  when: not kubeadmin_conf_stat.stat.exists
+  when: not kubeadm_master_conf_stat.stat.exists
   changed_when: true
 
 - name: Create .kube directory for root user
@@ -50,25 +50,25 @@
 - name: Get home directory of ansible_user if not root
   ansible.builtin.user:
     name: "{{ ansible_user }}"
-  register: ansible_user_info
+  register: kubeadm_master_user_info
   when: ansible_user is defined and ansible_user != 'root'
 
 - name: Create .kube directory for ansible_user
   ansible.builtin.file:
-    path: "{{ ansible_user_info.home }}/.kube"
+    path: "{{ kubeadm_master_user_info.home }}/.kube"
     state: directory
     owner: "{{ ansible_user }}"
     mode: "0755"
-  when: ansible_user is defined and ansible_user != 'root' and ansible_user_info.home is defined
+  when: ansible_user is defined and ansible_user != 'root' and kubeadm_master_user_info.home is defined
 
 - name: Copy admin.conf to ansible_user kubeconfig
   ansible.builtin.copy:
     src: /etc/kubernetes/admin.conf
-    dest: "{{ ansible_user_info.home }}/.kube/config"
+    dest: "{{ kubeadm_master_user_info.home }}/.kube/config"
     remote_src: true
     owner: "{{ ansible_user }}"
     mode: "0600"
-  when: ansible_user is defined and ansible_user != 'root' and ansible_user_info.home is defined
+  when: ansible_user is defined and ansible_user != 'root' and kubeadm_master_user_info.home is defined
 
 - name: Deploy Calico CNI networking plugin
   ansible.builtin.command:
@@ -88,12 +88,12 @@
 - name: Generate worker node join command
   ansible.builtin.command:
     cmd: kubeadm token create --print-join-command
-  register: join_cmd_raw
+  register: kubeadm_master_join_cmd_raw
   changed_when: false
 
 - name: Share worker join command across Ansible hosts
   ansible.builtin.set_fact:
-    kubeadm_join_cmd: "{{ join_cmd_raw.stdout }}"
+    kubeadm_join_cmd: "{{ kubeadm_master_join_cmd_raw.stdout }}"
   delegate_to: "{{ item }}"
   delegate_facts: true
   loop: "{{ groups['k8s_workers'] | default([]) }}"
