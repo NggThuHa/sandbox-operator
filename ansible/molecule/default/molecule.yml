@@ -4,7 +4,7 @@ driver:
   name: docker
 
 platforms:
-  - name: k3s-node-test
+  - name: k8s-node-test
     image: geerlingguy/docker-ubuntu2204-ansible:latest
     command: /lib/systemd/systemd
     privileged: true
@@ -22,7 +22,7 @@ provisioner:
     converge: converge.yml
     verify: verify.yml
   # MOLECULE_SCENARIO_DIRECTORY được Molecule inject tự động, trỏ tới
-  # ansible/k3s/molecule/default/ → ../../roles = ansible/k3s/roles/
+  # ansible/molecule/default/ → ../../roles = ansible/roles/
   env:
     ANSIBLE_ROLES_PATH: "${MOLECULE_SCENARIO_DIRECTORY}/../../roles"
   options:
@@ -31,6 +31,7 @@ provisioner:
   inventory:
     group_vars:
       all:
+        kubernetes_distro: "k3s"
         common_enable_shiftfs: false
         common_enable_lxcfs: false
 

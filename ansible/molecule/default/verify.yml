@@ -7,7 +7,7 @@
 
   tasks:
     - name: Verify required packages are installed
-      package:
+      ansible.builtin.package:
         name:
           - curl
           - ca-certificates
@@ -15,30 +15,42 @@
         state: present
 
     - name: Verify K3s config directory exists
-      stat:
+      ansible.builtin.stat:
         path: /etc/rancher/k3s
       register: k3s_dir
-      failed_when: not k3s_dir.stat.exists
+
+    - name: Assert K3s directory exists
+      ansible.builtin.assert:
+        that:
+          - k3s_dir.stat.exists
 
     - name: Verify K3s config file is written
-      stat:
+      ansible.builtin.stat:
         path: /etc/rancher/k3s/config.yaml
       register: k3s_config
-      failed_when: not k3s_config.stat.exists
 
-    - name: Verify sysctl config file is written
-      stat:
-        path: /etc/sysctl.d/99-k3s-sysbox.conf
+    - name: Assert K3s config file exists
+      ansible.builtin.assert:
+        that:
+          - k3s_config.stat.exists
+
+    - name: Verify sysctl config file is written (99-k8s-sysbox.conf)
+      ansible.builtin.stat:
+        path: /etc/sysctl.d/99-k8s-sysbox.conf
       register: sysctl_config
-      failed_when: not sysctl_config.stat.exists
 
-    - name: Show K3s config content for validation
-      command: cat /etc/rancher/k3s/config.yaml
+    - name: Assert sysctl config exists
+      ansible.builtin.assert:
+        that:
+          - sysctl_config.stat.exists
+
+    - name: Slurp K3s config content for validation
+      ansible.builtin.slurp:
+        src: /etc/rancher/k3s/config.yaml
       register: k3s_config_content
-      changed_when: false
 
     - name: Assert K3s config has UserNamespacesSupport flag
-      assert:
+      ansible.builtin.assert:
         that:
-          - "'UserNamespacesSupport' in k3s_config_content.stdout"
+          - "'UserNamespacesSupport' in (k3s_config_content['content'] | b64decode)"
         fail_msg: "K3s config is missing UserNamespacesSupport feature gate"
