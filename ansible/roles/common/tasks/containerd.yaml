@@ -1,6 +1,6 @@
 ---
 # ==============================================================================
-# ROLE COMMON: TINH CHỈNH CONTAINERD DÀNH RIÊNG CHO SYSBOX
+# ROLE COMMON: TINH CHỈNH CONTAINERD DÀNH RIÊNG CHO K3S & SYSBOX
 # ==============================================================================
 - name: Wait for containerd config directory to be created by K3s
   ansible.builtin.wait_for:
@@ -34,10 +34,10 @@
   ansible.builtin.systemd:
     name: k3s
     state: restarted
-  when: "'k3s_master' in group_names"
+  when: "'k8s_master' in group_names"
 
 - name: Restart K3s Agent service (on Worker nodes) to reload containerd
   ansible.builtin.systemd:
     name: k3s-agent
     state: restarted
-  when: "'k3s_workers' in group_names"
+  when: "'k8s_workers' in group_names"

@@ -1,0 +1,66 @@
+---
+# ==============================================================================
+# ROLE KUBEADM-REPO: THIẾT LẬP REPO VÀ CÀI ĐẶT KUBELET, KUBEADM, KUBECTL (v1.35)
+# ==============================================================================
+- name: Install APT auxiliary packages
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gpg
+    state: present
+    update_cache: true
+
+- name: Ensure APT keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Check if Kubernetes APT keyring is already present
+  ansible.builtin.stat:
+    path: "{{ kubeadm_keyring_file }}"
+  register: k8s_keyring_stat
+
+- name: Download and dearmor Kubernetes repository GPG key
+  ansible.builtin.shell:
+    cmd: "curl -fsSL {{ kubeadm_repo_url }}/Release.key | gpg --dearmor -o {{ kubeadm_keyring_file }}"
+    executable: /bin/bash
+  when: not k8s_keyring_stat.stat.exists
+  changed_when: true
+
+- name: Ensure correct permissions on Kubernetes GPG keyring
+  ansible.builtin.file:
+    path: "{{ kubeadm_keyring_file }}"
+    mode: "0644"
+
+- name: Configure Kubernetes packages repository (v1.35)
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/kubernetes.list
+    content: "deb [signed-by={{ kubeadm_keyring_file }}] {{ kubeadm_repo_url }}/ /\n"
+    mode: "0644"
+
+- name: Update APT cache after adding Kubernetes repository
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: Install kubelet, kubeadm, and kubectl
+  ansible.builtin.apt:
+    name:
+      - kubelet
+      - kubeadm
+      - kubectl
+    state: present
+
+- name: Hold Kubernetes package versions against unwanted upgrades
+  ansible.builtin.command:
+    cmd: apt-mark hold kubelet kubeadm kubectl
+  changed_when: false
+
+- name: Ensure kubelet systemd service is enabled
+  ansible.builtin.systemd:
+    name: kubelet
+    enabled: true
+  when: ansible_virtualization_type | default('') != "docker"
+  failed_when: false

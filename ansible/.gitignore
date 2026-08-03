@@ -1,0 +1,6 @@
+*.retry
+*.log
+admin.conf
+kubeconfig.yaml
+k3s.yaml
+.molecule/

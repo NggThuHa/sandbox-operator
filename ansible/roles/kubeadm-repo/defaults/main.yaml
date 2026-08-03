@@ -1,0 +1,4 @@
+---
+kubeadm_version_channel: "v1.35"
+kubeadm_repo_url: "https://pkgs.k8s.io/core:/stable:/{{ kubeadm_version_channel }}/deb"
+kubeadm_keyring_file: "/etc/apt/keyrings/kubernetes-apt-keyring.gpg"

@@ -28,20 +28,29 @@ jobs:
         run: |
           pip install ansible ansible-lint molecule "molecule-plugins[docker]" docker
 
-      - name: Syntax check all playbooks
-        working-directory: ansible/k3s
+      - name: Syntax check all playbooks (Kubeadm default)
+        working-directory: ansible
         run: |
           ansible-playbook cluster.yml \
             -i "localhost," \
             -e "ansible_connection=local" \
             --syntax-check
 
+      - name: Syntax check all playbooks (K3s mode)
+        working-directory: ansible
+        run: |
+          ansible-playbook cluster.yml \
+            -i "localhost," \
+            -e "ansible_connection=local" \
+            -e "kubernetes_distro=k3s" \
+            --syntax-check
+
       - name: Run ansible-lint
-        working-directory: ansible/k3s
+        working-directory: ansible
         run: ansible-lint cluster.yml
 
       - name: Run Molecule test (common role)
-        working-directory: ansible/k3s
+        working-directory: ansible
         env:
           # Cho phép Molecule dùng Docker daemon của runner
           DOCKER_HOST: unix:///var/run/docker.sock

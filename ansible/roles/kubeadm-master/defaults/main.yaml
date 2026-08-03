@@ -1,0 +1,5 @@
+---
+kubeadm_k8s_version: "v1.35.0"
+kubeadm_pod_subnet: "192.168.0.0/16" # Dùng 10.244.0.0/16 nếu trùng LAN host
+kubeadm_calico_url: "https://raw.githubusercontent.com/projectcalico/calico/v3.30.0/manifests/calico.yaml"
+kubeadm_config_path: "/etc/kubernetes/kubeadm-config.yaml"

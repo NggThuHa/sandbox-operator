@@ -1,0 +1,22 @@
+---
+# ==============================================================================
+# ROLE KUBEADM-WORKER: KẾT NẠP WORKER NODE VÀO CỤM KUBEADM
+# ==============================================================================
+- name: Check if worker node is already joined to a cluster
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubelet_conf_stat
+
+- name: Verify worker hostname is distinct from control-plane hostnames
+  ansible.builtin.assert:
+    that:
+      - "ansible_hostname not in (groups['k8s_master'] | default([]) | map('extract', hostvars, 'ansible_hostname') | list)"
+    fail_msg: "Hostname của worker node ({{ ansible_hostname }}) trùng với Master Node! Xin hãy đổi hostname bằng 'hostnamectl set-hostname <TEN_MOI>' và thử lại!"
+
+- name: Execute kubeadm join command on worker node
+  ansible.builtin.command:
+    cmd: "{{ kubeadm_join_cmd }}"
+  when:
+    - not kubelet_conf_stat.stat.exists
+    - kubeadm_join_cmd is defined
+  changed_when: true

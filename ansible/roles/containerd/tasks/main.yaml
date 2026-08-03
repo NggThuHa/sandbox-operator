@@ -1,0 +1,51 @@
+---
+# ==============================================================================
+# ROLE CONTAINERD: CÀI ĐẶT VÀ CẤU HÌNH CONTAINERD DÀNH CHO KUBEADM / SYSBOX
+# ==============================================================================
+- name: Install containerd package via APT
+  ansible.builtin.apt:
+    name: "{{ containerd_package_name | default('containerd') }}"
+    state: present
+    update_cache: true
+
+- name: Create containerd configuration directory
+  ansible.builtin.file:
+    path: /etc/containerd
+    state: directory
+    mode: "0755"
+
+- name: Check if containerd config file already exists
+  ansible.builtin.stat:
+    path: /etc/containerd/config.toml
+  register: containerd_config_stat
+
+- name: Generate containerd default configuration file
+  ansible.builtin.shell:
+    cmd: "containerd config default > /etc/containerd/config.toml"
+    executable: /bin/bash
+  when: not containerd_config_stat.stat.exists or containerd_force_reconfig | default(false)
+  changed_when: true
+
+- name: Enforce SystemdCgroup = true in containerd configuration
+  ansible.builtin.replace:
+    path: /etc/containerd/config.toml
+    regexp: '(\s+)SystemdCgroup = false'
+    replace: '\1SystemdCgroup = true'
+  register: containerd_cgroup_update
+
+- name: Restart and enable containerd service
+  ansible.builtin.systemd:
+    name: containerd
+    state: restarted
+    enabled: true
+  when:
+    - (containerd_cgroup_update.changed | default(false)) or not containerd_config_stat.stat.exists
+    - ansible_virtualization_type | default('') != "docker"
+
+- name: Ensure containerd service is actively running
+  ansible.builtin.systemd:
+    name: containerd
+    state: started
+    enabled: true
+  when: ansible_virtualization_type | default('') != "docker"
+  failed_when: false

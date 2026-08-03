@@ -1,0 +1,73 @@
+---
+# ==============================================================================
+# UNIFIED PLAYBOOK: TRIỂN KHAI CỤM KUBERNETES LAB (KUBEADM / K3S) & SYSBOX
+# ==============================================================================
+# Mặc định (kubeadm v1.35 + containerd + Calico + Sysbox):
+#   ansible-playbook cluster.yml
+#
+# Chuyển đổi sang K3s (+ Sysbox):
+#   ansible-playbook cluster.yml -e kubernetes_distro=k3s
+# ==============================================================================
+
+- name: Phase 1 - Chuẩn bị hạ tầng HĐH & Tiền xử lý (cgroup v2, HWE kernel, tắt swap, sysctl)
+  hosts: k8s_cluster
+  become: true
+  vars:
+    kubernetes_distro: "{{ kubernetes_distro | default('kubeadm') }}"
+  roles:
+    - role: common
+      tags: ['common', 'preflight']
+    - role: containerd
+      tags: ['containerd', 'runtime']
+      when: (kubernetes_distro | default('kubeadm')) == 'kubeadm'
+    - role: kubeadm-repo
+      tags: ['repo', 'packages']
+      when: (kubernetes_distro | default('kubeadm')) == 'kubeadm'
+
+- name: Phase 2 - Khởi tạo Control Plane (Master Node & CNI)
+  hosts: k8s_master
+  become: true
+  vars:
+    kubernetes_distro: "{{ kubernetes_distro | default('kubeadm') }}"
+  roles:
+    - role: kubeadm-master
+      tags: ['master', 'kubeadm-master', 'control-plane', 'cni']
+      when: (kubernetes_distro | default('kubeadm')) == 'kubeadm'
+    - role: k3s-master
+      tags: ['master', 'k3s-master', 'control-plane']
+      when: (kubernetes_distro | default('kubeadm')) == 'k3s'
+
+- name: Phase 3 - Khởi tạo Worker Nodes và kết nạp (join) vào Cụm Master
+  hosts: k8s_workers
+  become: true
+  vars:
+    kubernetes_distro: "{{ kubernetes_distro | default('kubeadm') }}"
+  roles:
+    - role: kubeadm-worker
+      tags: ['worker', 'kubeadm-worker', 'join']
+      when: (kubernetes_distro | default('kubeadm')) == 'kubeadm'
+    - role: k3s-worker
+      tags: ['worker', 'k3s-worker', 'join']
+      when: (kubernetes_distro | default('kubeadm')) == 'k3s'
+
+- name: Phase 4 - Cấu hình Containerd cho K3S (Chỉ áp dụng khi chạy K3s)
+  hosts: k8s_cluster
+  become: true
+  vars:
+    kubernetes_distro: "{{ kubernetes_distro | default('kubeadm') }}"
+  tasks:
+    - name: Include K3s specific containerd template tasks
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: containerd
+      when: (kubernetes_distro | default('kubeadm')) == 'k3s'
+      tags: ['containerd', 'k3s-runtime']
+
+- name: Phase 5 - Triển khai Sysbox Engine & RuntimeClass cho toàn bộ Cụm
+  hosts: k8s_master
+  become: true
+  vars:
+    kubernetes_distro: "{{ kubernetes_distro | default('kubeadm') }}"
+  roles:
+    - role: sysbox
+      tags: ['sysbox', 'runtime-class']

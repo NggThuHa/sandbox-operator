@@ -1,0 +1,4 @@
+---
+sysbox_manifest_url: "https://raw.githubusercontent.com/nestybox/sysbox/master/sysbox-k8s-manifests/sysbox-install.yaml"
+kubernetes_distro: "k3s"
+sysbox_kubectl: "{{ 'k3s kubectl' if (kubernetes_distro | default('k3s')) == 'k3s' else 'kubectl' }}"

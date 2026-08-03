@@ -1,29 +1,33 @@
 ---
 # ==============================================================================
-# ROLE SYSBOX: TRIỂN KHAI ĐỘNG CƠ CONTAINER-IN-CONTAINER VÀ RUNTIMECLASS
+# ROLE SYSBOX: TRIỂN KHAI ĐỘNG CƠ CONTAINER-IN-CONTAINER VÀ RUNTIMECLASS (K3S / KUBEADM)
 # ==============================================================================
 - name: Wait for all cluster nodes (Master & Workers) to register as Ready in K8s
   ansible.builtin.command:
-    cmd: k3s kubectl wait --for=condition=Ready node --all --timeout=300s
+    cmd: "{{ sysbox_kubectl }} wait --for=condition=Ready node --all --timeout=300s"
   changed_when: false
+  retries: 3
+  delay: 10
+  register: sysbox_wait_nodes
+  until: sysbox_wait_nodes.rc == 0
 
 - name: Label ALL cluster nodes for Sysbox automated installation
   ansible.builtin.command:
-    cmd: k3s kubectl label nodes --all sysbox-install=yes --overwrite
+    cmd: "{{ sysbox_kubectl }} label nodes --all sysbox-install=yes --overwrite"
   changed_when: false
 
 - name: Apply Sysbox DaemonSet installer manifest
   ansible.builtin.command:
-    cmd: k3s kubectl apply -f {{ sysbox_manifest_url }}
+    cmd: "{{ sysbox_kubectl }} apply -f {{ sysbox_manifest_url }}"
   changed_when: true
 
 - name: Wait for Sysbox installer pods to converge in kube-system namespace
   ansible.builtin.shell:
-    cmd: set -o pipefail && k3s kubectl get pods -n kube-system | grep -i sysbox
+    cmd: "set -o pipefail && {{ sysbox_kubectl }} get pods -n kube-system | grep -i sysbox"
     executable: /bin/bash
   register: sysbox_pods
   retries: 30
-  delay: 5
+  delay: 10
   until: sysbox_pods.rc == 0
   changed_when: false
 
@@ -32,8 +36,9 @@
     path: /usr/bin/sysbox-runc
     state: present
     timeout: 600
+  when: ansible_virtualization_type | default('') != "docker"
 
-- name: Ensure Sysbox daemon systemd services are active
+- name: Ensure Sysbox daemon systemd services are active and enabled
   ansible.builtin.systemd:
     name: "{{ item }}"
     state: started
@@ -42,6 +47,8 @@
     - sysbox
     - sysbox-fs
     - sysbox-mgr
+  when: ansible_virtualization_type | default('') != "docker"
+  failed_when: false
 
 - name: Create Sysbox RuntimeClass resource definition
   ansible.builtin.copy:
@@ -56,13 +63,13 @@
 
 - name: Apply Sysbox RuntimeClass into Kubernetes cluster
   ansible.builtin.command:
-    cmd: k3s kubectl apply -f /tmp/sysbox-runtimeclass.yaml
+    cmd: "{{ sysbox_kubectl }} apply -f /tmp/sysbox-runtimeclass.yaml"
   changed_when: true
 
-- name: Verify Traefik Ingress Controller availability
+- name: Verify Traefik Ingress Controller availability (K3s specific)
   ansible.builtin.command:
     cmd: >-
-      k3s kubectl wait --namespace kube-system
+      {{ sysbox_kubectl }} wait --namespace kube-system
       --for=condition=ready pod
       --selector=app.kubernetes.io/name=traefik
       --timeout=180s
@@ -71,10 +78,11 @@
   delay: 10
   until: sysbox_traefik_ready.rc == 0
   changed_when: false
+  when: kubernetes_distro | default('k3s') == 'k3s'
 
-- name: Display cluster readiness status and Ingress Classes
+- name: Display cluster readiness status and RuntimeClass
   ansible.builtin.shell:
-    cmd: k3s kubectl get nodes -o wide && k3s kubectl get ingressclass
+    cmd: "{{ sysbox_kubectl }} get nodes -o wide && {{ sysbox_kubectl }} get runtimeclass"
     executable: /bin/bash
   register: sysbox_cluster_summary
   changed_when: false

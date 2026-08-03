@@ -1,7 +1,0 @@
----
-# ==============================================================================
-# K3S CLUSTER NETWORKING & CONFIG (Tương tự group_vars/k8s_cluster.yml)
-# ==============================================================================
-
-# Địa chỉ IP của máy chủ Kube-apiserver Master để Worker kết nạp:
-k3s_api_host: "{{ ansible_host | default(inventory_hostname) }}"

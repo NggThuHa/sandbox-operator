@@ -1,0 +1,8 @@
+---
+# ==============================================================================
+# KUBERNETES CLUSTER NETWORKING & CONFIG (KUBESPRAY STYLE)
+# ==============================================================================
+
+# Địa chỉ IP của máy chủ Kube-apiserver Master để Worker kết nạp (dành cho cả Kubeadm và K3s):
+k8s_api_host: "{{ ansible_host | default(inventory_hostname) }}"
+k3s_api_host: "{{ k8s_api_host }}" # Đồng bộ tương thích cho role K3s
