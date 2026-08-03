@@ -30,3 +30,6 @@ go.work
 *.kubeconfig
 **/host.ini
 **/k3s.yaml
+
+# Generated distribution installer manifests
+dist/
