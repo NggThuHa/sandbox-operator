@@ -1,10 +1,10 @@
-# 🚀 KubeEdu API — Cloud-Native Practical Lab & Sandbox Platform
+# 🚀 KubeEdu Systemd Operator — Cloud-Native Practical Lab & Sandbox Platform
 
 ![Kubebuilder](https://img.shields.io/badge/Kubebuilder-v4-blue.svg) ![Kubernetes](https://img.shields.io/badge/Kubernetes-v1.32+-326ce5.svg) ![Go Version](https://img.shields.io/badge/Go-v1.26+-00ADD8.svg) ![Ansible](https://img.shields.io/badge/Ansible-Kubespray%20Style-EE0000.svg)
 
-**KubeEdu API** là hệ thống nền tảng điện toán đám mây tự động hóa quản trị phòng thí nghiệm & Sandbox (Cloud-Native Lab Platform) tiêu chuẩn doanh nghiệp, được thiết kế chuyên biệt cho môi trường đào tạo thực thao (University Practical Labs, Coding Bootcamps, DevSecOps Cyber-Range). 
+**KubeEdu Systemd Operator** là bộ điều khiển Kubernetes (Kubernetes Operator) tiêu chuẩn doanh nghiệp của hệ sinh thái **KubeEdu**, chuyên tự động hóa việc khởi tạo và quản trị nền tảng phòng thí nghiệm & Sandbox (Cloud-Native Lab Platform) trên điện toán đám mây, phục vụ tối ưu cho mục đích đào tạo thực thao (University Practical Labs, Coding Bootcamps, DevSecOps Cyber-Range). 
 
-Hệ thống tích hợp sâu với **Sysbox Runtime** để vận hành các máy ảo Container (System Containers / Docker-in-Docker) ngay bên trong Kubernetes Pod với hiệu năng cao nhạy bén như máy chủ vật lý, hỗ trợ trọn vẹn kết nối Terminal/VSCode qua Web (WebSocket Secure).
+Hệ thống tích hợp sâu với **Sysbox Runtime** để vận hành các máy ảo Container (System Containers / Docker-in-Docker với đầy đủ `systemd` gốc) ngay bên trong Kubernetes Pod với hiệu năng cao nhạy bén như máy chủ vật lý, hỗ trợ trọn vẹn kết nối Terminal/VSCode qua Web (WebSocket Secure).
 
 ---
 
@@ -14,7 +14,7 @@ Hệ thống hoạt động dựa trên 2 thực thể Custom Resources chính:
 
 ```mermaid
 graph TD
-    User([🧑‍🎓 Sinh viên / Giảng viên]) -->|Gõ YAML hoặc qua API Web| Operator[⚙️ KubeEdu API Operator]
+    User([🧑‍🎓 Sinh viên / Giảng viên]) -->|Gõ YAML hoặc qua API Web| Operator[⚙️ KubeEdu Systemd Operator]
     Operator -->|Quản trị Không gian Lab| VC[📦 VirtualCluster CRD]
     Operator -->|Quản trị Máy Ảo Lab| VI[🖥️ VirtualInstance CRD]
 
@@ -112,14 +112,14 @@ make test
 #### Cách 1: Cài đặt Siêu Tốc với một dòng lệnh (Single-Command Install)
 Dành cho người dùng cuối (End-users / Admin Cụm K8s), chỉ cần chạy duy nhất một lệnh thông qua file bundle `install.yaml` đã đóng gói sẵn trong kho chứa:
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/ngtukien/KubeEdu/main/dist/install.yaml
+kubectl apply -f https://raw.githubusercontent.com/KubeEdu/systemd-operator/main/dist/install.yaml
 ```
 > 💡 *File `dist/install.yaml` được tự động sinh ra bằng lệnh `make build-installer IMG=...` và đã được đóng gói tự động hóa 100% trong chu trình GitHub Actions CI/CD Pipeline mỗi khi có phiên bản mới!*
 
 #### Cách 2: Triển khai cho Nhà Phát Triển từ Mã Nguồn (Developer Mode)
 **Bước 1: Biên dịch và đẩy Docker Image của Operator lên Registry:**
 ```bash
-export IMG="ghcr.io/toiyeuptit/kubeedu-api-operator:v1.0.0"
+export IMG="ghcr.io/kubeedu/systemd-operator:v1.0.0"
 make docker-build docker-push IMG=$IMG
 ```
 
