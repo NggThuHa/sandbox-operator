@@ -35,8 +35,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	labv1alpha1 "github.com/NguyenTuKien/TYP-Operator/api/v1alpha1"
-	"github.com/NguyenTuKien/TYP-Operator/internal/utils"
+	labv1alpha1 "github.com/kubeclass/systemd-operator/api/v1alpha1"
+	"github.com/kubeclass/systemd-operator/internal/utils"
 )
 
 const (

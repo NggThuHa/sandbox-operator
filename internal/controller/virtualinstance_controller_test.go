@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	labv1alpha1 "github.com/NguyenTuKien/TYP-Operator/api/v1alpha1"
+	labv1alpha1 "github.com/kubeclass/systemd-operator/api/v1alpha1"
 )
 
 var _ = Describe("VirtualInstance Controller", func() {

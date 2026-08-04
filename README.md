@@ -44,46 +44,47 @@ graph TD
 
 ---
 
-## 🏗️ Hướng Dẫn Kích Hoạt Cụm K3s & Sysbox (Ansible Kubespray-Style)
+## 🏗️ Hướng Dẫn Kích Hoạt Cụm Kubeadm/K3s & Sysbox (Ansible Kubespray-Style)
 
-Hệ thống được trang bị sẵn bộ engine Ansible tối ưu hóa theo quy chuẩn phong cách **Kubespray**, giúp bạn biến hàng tá máy chủ thô (Bare-metal / VM) thành cụm Lab K3s chạy Sysbox chỉ trong vài phút!
+Hệ thống được trang bị sẵn bộ engine Ansible tối ưu hóa theo quy chuẩn phong cách **Kubespray**, giúp bạn biến hàng tá máy chủ thô (Bare-metal / VM) thành cụm Lab Kubeadm hoặc K3s chạy Sysbox chỉ trong vài phút!
 
-### Cây Thư Mục Khởi Tạo Cụm (`ansible/k3s/`)
+### Cây Thư Mục Khởi Tạo Cụm (`ansible/`)
 ```text
-ansible/k3s/
+ansible/
 ├── ansible.cfg                    # Cấu hình Ansible tối ưu SSH Pipelining & Callback
-├── cluster.yml                    # 🚀 Playbook chính: Trí tuệ nhận diện Single-Node & Multi-Node
-├── k3s-setup.yaml                 # 📜 Bản gốc Single-Node để tiện mở so sánh đối chiếu
+├── cluster.yml                    # 🚀 Playbook hợp nhất toàn cụm (Mặc định: Kubeadm v1.35)
+├── README.md                      # 📜 Tài liệu hướng dẫn chuyên sâu chi tiết cho Ansible
 ├── inventory/                     # Kho Phân Cực Môi Trường (Environment Segmentation)
 │   └── lab-cluster/               
 │       ├── hosts.ini              # Danh sách IP máy chủ Master và Workers
-│       └── group_vars/            # Kho cấu hình biến toàn bộ cụm (K3s version, Sysbox flags)
-└── roles/                         # Bộ động cơ tự động hóa chuyên sâu
-    ├── common/                    # Setup Linux kernel (shiftfs, userns, lxcfs, containerd)
-    ├── k3s-master/                # Cài đặt Kube-apiserver & Trích xuất mã chứng thực Cluster
-    ├── k3s-worker/                # Cài đặt Agent & Ghép nối Worker vào cụm trung tâm
-    └── sysbox/                    # Nạp DaemonSet Sysbox & Đăng ký RuntimeClass K8s
+│       └── group_vars/            # Kho cấu hình biến toàn bộ cụm (Kubeadm/K3s version, Sysbox)
+└── roles/                         # Bộ động cơ tự động hóa chuyên sâu (common, containerd, kubeadm-*, k3s-*, sysbox)
 ```
 
-### Cách Thực Thi Khởi Tạo Cụm
+### Cách Thực Thi Khởi Tạo & Quản Trị Cụm
 
-#### Bước 1: Khai báo địa chỉ IP máy chủ
-Mở file cấu hình danh sách máy chủ **`ansible/k3s/inventory/lab-cluster/hosts.ini`** và điền IP thực tế của bạn:
-
-* **Trường hợp 1 (Chạy thử nghiệm 1 Máy Độc Lập - Single Node):** 
-  Chỉ cần điền 1 máy bên dưới `[k3s_master]` và để trống `[k3s_workers]`. Hệ thống sẽ nhận diện tự động và cài gộp trọn bộ hạ tầng vào Node này.
-* **Trường hợp 2 (Triển khai phòng Lab Đa Máy Chủ - Cluster):**
-  Điền IP máy điều hành vào `[k3s_master]` và liệt kê toàn bộ dàn máy thi cử vào mục `[k3s_workers]`.
-
-#### Bước 2: Kích hoạt lệnh triển khai
-Di chuyển vào thư mục `ansible/k3s/` và kích hoạt lệnh thi triển cơ bản:
-
+#### 1. Triển khai chuẩn (Kubeadm v1.35 & Calico - Mặc định) hoặc K3s:
+Cấu hình IP trong **`ansible/inventory/lab-cluster/hosts.ini`**, sau đó chạy:
 ```bash
-cd ansible/k3s/
+cd ansible
+# Chạy mặc định với Kubeadm:
 ansible-playbook cluster.yml
+
+# Chạy linh hoạt với K3s (Edge/Nhẹ):
+ansible-playbook cluster.yml -e kubernetes_distro=k3s
 ```
 
-> 💡 *Nhờ cấu hình trung tâm trong `ansible.cfg`, bạn không cần truyền thêm cờ `-i inventory/lab-cluster/hosts.ini`. File cấu hình `k3s.yaml` sau khi hoàn tất sẽ tự động tải thẳng về máy tính điều khiển của bạn để thao tác qua `kubectl`!*
+#### 2. ⚡ Thực thi Playbook Đơn Trực Tiếp (Zero-Clone / Không cần tải repo):
+Với các kịch bản cài đặt siêu nhanh (Cloud-init / User-data) hoặc thi hành các playbook cấu hình độc lập file đơn (single-file), bạn có thể dùng `curl` lấy trực tiếp YAML từ GitHub và truyền qua ống dẫn vào `ansible-playbook` mà **không cần chạy lệnh `git clone`**:
+```bash
+# Thực thi trực tiếp cho máy Local (qua stdin):
+curl -fsSL https://raw.githubusercontent.com/KubeEdu/systemd-operator/main/ansible/<ten-playbook-don>.yml | ansible-playbook -i "localhost," -c local /dev/stdin
+
+# Thực thi trực tiếp cho các máy chủ Remote (qua Process Substitution):
+ansible-playbook -i "192.168.123.124,192.168.123.125," -u ubuntu <(curl -fsSL https://raw.githubusercontent.com/KubeEdu/systemd-operator/main/ansible/<ten-playbook-don>.yml)
+```
+*(Chi tiết tham khảo đầy đủ tại [ansible/README.md](file:///home/ngtukien/Documents/Kubebuilder/ansible/README.md))*
+
 
 ---
 
@@ -109,12 +110,16 @@ make test
 
 ### 3. Đưa Operator Lên Cụm K3s Thực Chiến
 
-#### Cách 1: Cài đặt Siêu Tốc với một dòng lệnh (Single-Command Install)
-Dành cho người dùng cuối (End-users / Admin Cụm K8s), chỉ cần chạy duy nhất một lệnh thông qua file bundle `install.yaml` đã đóng gói sẵn trong kho chứa:
+#### Cách 1: Cài đặt Siêu Tốc qua GitHub Releases / Kustomize (Single-Command Install)
+Dành cho người dùng cuối (End-users / Admin Cụm K8s), bạn có thể chạy duy nhất một lệnh bằng cách tải bundle `install.yaml` từ bản phát hành (Releases) mới nhất, hoặc nạp thẳng Kustomize từ mã nguồn đã pull bằng Ansible trước đó:
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/KubeEdu/systemd-operator/main/dist/install.yaml
+# Lựa chọn A (Từ gói GitHub Releases khi đã tạo tag chính thức v1.x.x):
+kubectl apply -f https://github.com/KubeEdu/systemd-operator/releases/latest/download/install.yaml
+
+# Lựa chọn B (Trực tiếp từ thư mục Ansible đã pull về máy trước đó):
+kubectl apply -k /tmp/kubeedu-ansible/config/default
 ```
-> 💡 *File `dist/install.yaml` được tự động sinh ra bằng lệnh `make build-installer IMG=...` và đã được đóng gói tự động hóa 100% trong chu trình GitHub Actions CI/CD Pipeline mỗi khi có phiên bản mới!*
+> 💡 *File `dist/install.yaml` được tự động sinh ra bằng lệnh `make build-installer IMG=...` và đính kèm vào trang **Releases** của GitHub mỗi khi bạn tạo và đẩy tag phiên bản mới (ví dụ: `git tag v1.0.0 && git push --tags`). Do được quản lý tự động bởi CI/CD nên thư mục `dist/` bị vô hiệu hóa theo dõi trong `.gitignore` của nhánh `main`.*
 
 #### Cách 2: Triển khai cho Nhà Phát Triển từ Mã Nguồn (Developer Mode)
 **Bước 1: Biên dịch và đẩy Docker Image của Operator lên Registry:**

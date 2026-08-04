@@ -28,7 +28,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/NguyenTuKien/TYP-Operator/test/utils"
+	"github.com/kubeclass/systemd-operator/test/utils"
 )
 
 var (

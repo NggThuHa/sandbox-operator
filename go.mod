@@ -1,4 +1,4 @@
-module github.com/NguyenTuKien/TYP-Operator
+module github.com/kubeclass/systemd-operator
 
 go 1.26.0
 

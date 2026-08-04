@@ -3,46 +3,46 @@
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
 cliVersion: 4.15.0
-domain: devops.toiyeuptit.com
+domain: kubeclass.io
 layout:
 - go.kubebuilder.io/v4
-projectName: kubebuilder
-repo: github.com/NguyenTuKien/TYP-Operator
+projectName: systemd-operator
+repo: github.com/kubeclass/systemd-operator
 resources:
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: devops.toiyeuptit.com
+  domain: kubeclass.io
   group: lab
   kind: Instance
-  path: github.com/NguyenTuKien/TYP-Operator/api/v1alpha1
+  path: github.com/kubeclass/systemd-operator/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: devops.toiyeuptit.com
+  domain: kubeclass.io
   group: lab
   kind: Cluster
-  path: github.com/NguyenTuKien/TYP-Operator/api/v1alpha1
+  path: github.com/kubeclass/systemd-operator/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: devops.toiyeuptit.com
+  domain: kubeclass.io
   group: lab
   kind: VCluster
-  path: github.com/NguyenTuKien/TYP-Operator/api/v1alpha1
+  path: github.com/kubeclass/systemd-operator/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: devops.toiyeuptit.com
+  domain: kubeclass.io
   group: lab
   kind: VInstance
-  path: github.com/NguyenTuKien/TYP-Operator/api/v1alpha1
+  path: github.com/kubeclass/systemd-operator/api/v1alpha1
   version: v1alpha1
 version: "3"

@@ -74,6 +74,25 @@ cd ansible
 ansible-playbook cluster.yml -e kubernetes_distro=k3s
 ```
 
+### ⚡ Cách 3: Thực thi Playbook đơn trực tiếp không cần Clone Code (Zero-Clone / Standalone Playbook)
+Đối với các kịch bản khởi tạo nhanh máy ảo (Cloud-init / User-data) hoặc thi hành các playbook file đơn (single-file / self-contained), bạn có thể dùng `curl` lấy trực tiếp nội dung từ kho chứa và truyền thẳng vào `ansible-playbook` mà **không cần `git clone`** toàn bộ dự án về máy:
+
+#### 1. Thực thi trên máy sở tại (Localhost / Cloud-init qua `stdin`):
+```bash
+curl -fsSL https://raw.githubusercontent.com/KubeEdu/systemd-operator/main/ansible/<ten-playbook-don>.yml | ansible-playbook -i "localhost," -c local /dev/stdin
+```
+
+#### 2. Thực thi cho các máy chủ Remote (qua Process Substitution):
+```bash
+ansible-playbook -i "192.168.123.124,192.168.123.125," -u ubuntu <(curl -fsSL https://raw.githubusercontent.com/KubeEdu/systemd-operator/main/ansible/<ten-playbook-don>.yml)
+```
+> 💡 **Lưu ý kỹ thuật:** Phương pháp `curl ... | ansible-playbook` chỉ áp dụng lý tưởng cho **playbook đơn lẻ không bị ràng buộc đường dẫn cục bộ**. Khi muốn chạy trọn bộ cụm (`cluster.yml` yêu cầu nạp thư mục `roles/`) trên localhost mà không muốn thao tác `git clone` thủ công, bạn hãy xuất nhanh inventory tạm và chạy bằng `ansible-pull`:
+> ```bash
+> printf "[k8s_master]\nlocalhost ansible_connection=local\n\n[k8s_cluster:children]\nk8s_master\n" > /tmp/local.ini && \
+> ansible-pull -U https://github.com/KubeEdu/systemd-operator.git -d /tmp/kubeedu-ansible \
+>   -i /tmp/local.ini ansible/cluster.yml -e "kubernetes_distro=k3s"
+> ```
+
 ---
 
 ## 5. Kiểm Chứng Sau Cài Đặt (Verification & Test Pod)
