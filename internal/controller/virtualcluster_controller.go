@@ -273,13 +273,8 @@ func (r *VirtualClusterReconciler) reconcileResourceQuota(ctx context.Context, v
 			quota.Spec.Hard[corev1.ResourceServices] = *resource.NewQuantity(int64(virtualCluster.Spec.Quota.Objects.ServicesLimit), resource.DecimalSI)
 		}
 
-		if !virtualCluster.Spec.Quota.Storage.LocalLimit.IsZero() {
-			localScKey := corev1.ResourceName(fmt.Sprintf("%s.storageclass.storage.k8s.io/requests.storage", utils.GetStorageClassName("local")))
-			quota.Spec.Hard[localScKey] = virtualCluster.Spec.Quota.Storage.LocalLimit
-		}
-		if !virtualCluster.Spec.Quota.Storage.NetworkLimit.IsZero() {
-			netScKey := corev1.ResourceName(fmt.Sprintf("%s.storageclass.storage.k8s.io/requests.storage", utils.GetStorageClassName("network")))
-			quota.Spec.Hard[netScKey] = virtualCluster.Spec.Quota.Storage.NetworkLimit
+		if !virtualCluster.Spec.Quota.Storage.Limit.IsZero() {
+			quota.Spec.Hard[corev1.ResourceLimitsEphemeralStorage] = virtualCluster.Spec.Quota.Storage.Limit
 		}
 		return nil
 	})
@@ -360,13 +355,8 @@ func (r *VirtualClusterReconciler) updateVirtualClusterStatus(ctx context.Contex
 		if svcs, ok := used[corev1.ResourceServices]; ok {
 			virtualCluster.Status.QuotaUsage.Objects.ServicesUsed = int32(svcs.Value())
 		}
-		localScKey := corev1.ResourceName(fmt.Sprintf("%s.storageclass.storage.k8s.io/requests.storage", utils.GetStorageClassName("local")))
-		if loc, ok := used[localScKey]; ok {
-			virtualCluster.Status.QuotaUsage.Storage.LocalUsed = loc
-		}
-		netScKey := corev1.ResourceName(fmt.Sprintf("%s.storageclass.storage.k8s.io/requests.storage", utils.GetStorageClassName("network")))
-		if net, ok := used[netScKey]; ok {
-			virtualCluster.Status.QuotaUsage.Storage.NetworkUsed = net
+		if eph, ok := used[corev1.ResourceLimitsEphemeralStorage]; ok {
+			virtualCluster.Status.QuotaUsage.Storage.Used = eph
 		}
 	}
 

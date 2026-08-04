@@ -25,7 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -58,7 +58,7 @@ type VirtualInstanceReconciler struct {
 // +kubebuilder:rbac:groups=lab.devops.toiyeuptit.com,resources=virtualinstances/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=lab.devops.toiyeuptit.com,resources=virtualinstances/finalizers,verbs=update
 // +kubebuilder:rbac:groups=lab.devops.toiyeuptit.com,resources=virtualclusters,verbs=get;list;watch
-// +kubebuilder:rbac:groups=core,resources=pods;services;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=pods;services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 
@@ -116,23 +116,15 @@ func (r *VirtualInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		targetNamespace = utils.GenerateTargetNamespace(virtualCluster.Name)
 	}
 
-	// 5. KIẾN TẠO CẤU TRÚC Ổ ĐĨA LƯU TRỮ (PersistentVolumeClaims)
-	pvcMap, volumesStatus, err := r.reconcilePVCs(ctx, virtualInstance, targetNamespace)
-	if err != nil {
-		log.Error(err, "Failed to reconcile PVCs for VirtualInstance")
-		r.updateStatusFailed(ctx, virtualInstance, "PVCError", err.Error())
-		return ctrl.Result{}, err
-	}
-
-	// 6. KIẾN TẠO MÁY ẢO DOCKER-IN-DOCKER VỚI SYSBOX RUNTIME (Pod)
-	pod, err := r.reconcileSysboxPod(ctx, virtualInstance, targetNamespace, pvcMap)
+	// 5. KIẾN TẠO MÁY ẢO DOCKER-IN-DOCKER VỚI SYSBOX RUNTIME (Pod)
+	pod, err := r.reconcileSysboxPod(ctx, virtualInstance, targetNamespace)
 	if err != nil {
 		log.Error(err, "Failed to reconcile Sysbox Pod for VirtualInstance")
 		r.updateStatusFailed(ctx, virtualInstance, "PodError", err.Error())
 		return ctrl.Result{}, err
 	}
 
-	// 7. KIẾN TẠO DỊCH VỤ GOM LƯU LƯỢNG MẠNG (ClusterIP Service)
+	// 6. KIẾN TẠO DỊCH VỤ GOM LƯU LƯỢNG MẠNG (ClusterIP Service)
 	svc, err := r.reconcileServices(ctx, virtualInstance, targetNamespace)
 	if err != nil {
 		log.Error(err, "Failed to reconcile Service for VirtualInstance")
@@ -140,7 +132,7 @@ func (r *VirtualInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	// 8. KIẾN TẠO CỔNG TRUY CẬP BẢO MẬT HTTPS (Ingress with TLS & Cert-Manager)
+	// 7. KIẾN TẠO CỔNG TRUY CẬP BẢO MẬT HTTPS (Ingress with TLS & Cert-Manager)
 	ingress, err := r.reconcileIngress(ctx, virtualInstance, virtualCluster, targetNamespace, svc)
 	if err != nil {
 		log.Error(err, "Failed to reconcile Ingress for VirtualInstance")
@@ -148,8 +140,8 @@ func (r *VirtualInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	// 9. CẬP NHẬT TRẠNG THÁI GIAO DIỆN (UI Endpoints, Pod IP, Volumes Status)
-	if err := r.updateVirtualInstanceStatus(ctx, virtualInstance, pod, svc, ingress, volumesStatus); err != nil {
+	// 8. CẬP NHẬT TRẠNG THÁI GIAO DIỆN (UI Endpoints, Pod IP)
+	if err := r.updateVirtualInstanceStatus(ctx, virtualInstance, pod, svc, ingress); err != nil {
 		log.Error(err, "Failed to update VirtualInstance status")
 		return ctrl.Result{}, err
 	}
@@ -202,7 +194,7 @@ func (r *VirtualInstanceReconciler) reconcileFinalizer(ctx context.Context, virt
 	_ = r.DeleteAllOf(ctx, &networkingv1.Ingress{}, client.InNamespace(targetNs), matchLabels)
 	_ = r.DeleteAllOf(ctx, &corev1.Service{}, client.InNamespace(targetNs), matchLabels)
 	_ = r.DeleteAllOf(ctx, &corev1.Pod{}, client.InNamespace(targetNs), matchLabels)
-	_ = r.DeleteAllOf(ctx, &corev1.PersistentVolumeClaim{}, client.InNamespace(targetNs), matchLabels)
+	// Không cần xóa PVC vì không còn dùng PVC
 
 	log.Info("Successfully cleaned up all workloads in target namespace. Removing Finalizer", "name", virtualInstance.Name)
 	controllerutil.RemoveFinalizer(virtualInstance, utils.VirtualInstanceFinalizer)
@@ -213,81 +205,7 @@ func (r *VirtualInstanceReconciler) reconcileFinalizer(ctx context.Context, virt
 	return ctrl.Result{}, nil
 }
 
-func (r *VirtualInstanceReconciler) reconcilePVCs(ctx context.Context, virtualInstance *labv1alpha1.VirtualInstance, targetNs string) (map[string]string, labv1alpha1.VirtualInstanceVolumesStatus, error) {
-	log := logf.FromContext(ctx)
-	pvcMap := make(map[string]string)
-	var volStatus labv1alpha1.VirtualInstanceVolumesStatus
-
-	createPVC := func(pvcName, volType string, size resource.Quantity, _ bool, labelName string) (labv1alpha1.VirtualInstanceVolumeStatusDetail, error) {
-		pvc := &corev1.PersistentVolumeClaim{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      pvcName,
-				Namespace: targetNs,
-			},
-		}
-
-		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, pvc, func() error {
-			if pvc.Labels == nil {
-				pvc.Labels = make(map[string]string)
-			}
-			pvc.Labels[utils.LabelManagedBy] = utils.LabelValueManagedBy
-			pvc.Labels[utils.LabelVirtualCluster] = virtualInstance.Spec.VirtualClusterRef
-			pvc.Labels[utils.LabelVirtualInstance] = virtualInstance.Name
-
-			if len(pvc.Spec.AccessModes) == 0 {
-				pvc.Spec.AccessModes = []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
-			}
-
-			scName := utils.GetStorageClassName(volType)
-			if scName != "" {
-				pvc.Spec.StorageClassName = &scName
-			} else {
-				pvc.Spec.StorageClassName = nil
-			}
-
-			if pvc.Spec.Resources.Requests == nil {
-				pvc.Spec.Resources.Requests = corev1.ResourceList{}
-			}
-			pvc.Spec.Resources.Requests[corev1.ResourceStorage] = size
-			return nil
-		})
-
-		detail := labv1alpha1.VirtualInstanceVolumeStatusDetail{
-			Name:    labelName,
-			PVCName: pvcName,
-			Status:  string(pvc.Status.Phase),
-		}
-		if detail.Status == "" {
-			detail.Status = "Pending"
-		}
-		return detail, err
-	}
-
-	if !virtualInstance.Spec.Storage.Root.Size.IsZero() {
-		rootPvcName := utils.SanitizeName(fmt.Sprintf("%s-root-pvc", virtualInstance.Name), 63)
-		detail, err := createPVC(rootPvcName, virtualInstance.Spec.Storage.Root.Type, virtualInstance.Spec.Storage.Root.Size, true, "root")
-		if err != nil {
-			return nil, volStatus, err
-		}
-		pvcMap["/var/lib/docker"] = rootPvcName
-		volStatus.RootVolume = detail
-	}
-
-	for _, dv := range virtualInstance.Spec.Storage.DataVolumes {
-		dvPvcName := utils.SanitizeName(fmt.Sprintf("%s-%s-pvc", virtualInstance.Name, dv.Name), 63)
-		detail, err := createPVC(dvPvcName, dv.Type, dv.Size, false, dv.Name)
-		if err != nil {
-			return nil, volStatus, err
-		}
-		pvcMap[dv.MountPath] = dvPvcName
-		volStatus.DataVolumes = append(volStatus.DataVolumes, detail)
-	}
-
-	log.Info("Reconciled all volume PVCs successfully", "virtualInstance", virtualInstance.Name, "namespace", targetNs)
-	return pvcMap, volStatus, nil
-}
-
-func (r *VirtualInstanceReconciler) reconcileSysboxPod(ctx context.Context, virtualInstance *labv1alpha1.VirtualInstance, targetNs string, pvcMap map[string]string) (*corev1.Pod, error) {
+func (r *VirtualInstanceReconciler) reconcileSysboxPod(ctx context.Context, virtualInstance *labv1alpha1.VirtualInstance, targetNs string) (*corev1.Pod, error) {
 	log := logf.FromContext(ctx)
 	podName := utils.SanitizeName(fmt.Sprintf("%s-sysbox", virtualInstance.Name), 63)
 	pod := &corev1.Pod{
@@ -330,25 +248,7 @@ func (r *VirtualInstanceReconciler) reconcileSysboxPod(ctx context.Context, virt
 		var volumes []corev1.Volume
 		var mounts []corev1.VolumeMount
 
-		idx := 0
-		for mountPath, pvcName := range pvcMap {
-			volName := fmt.Sprintf("vol-%d", idx)
-			volumes = append(volumes, corev1.Volume{
-				Name: volName,
-				VolumeSource: corev1.VolumeSource{
-					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-						ClaimName: pvcName,
-					},
-				},
-			})
-			mounts = append(mounts, corev1.VolumeMount{
-				Name:      volName,
-				MountPath: mountPath,
-			})
-			idx++
-		}
-
-		// Mount lxcfs proc filesystem for accurate resource reporting and isolation in Sysbox containers
+		// lxcfs proc mounts — báo cáo resource chính xác cho Sysbox containers
 		hostPathTypeFile := corev1.HostPathFile
 		lxcfsMounts := []struct {
 			name      string
@@ -416,13 +316,8 @@ func (r *VirtualInstanceReconciler) reconcileSysboxPod(ctx context.Context, virt
 		if !virtualInstance.Spec.Resources.Memory.Limit.IsZero() {
 			resList.Limits[corev1.ResourceMemory] = virtualInstance.Spec.Resources.Memory.Limit
 		}
-		if !virtualInstance.Spec.Resources.EphemeralStorage.Request.IsZero() {
-			resList.Requests[corev1.ResourceEphemeralStorage] = virtualInstance.Spec.Resources.EphemeralStorage.Request
-		}
-		if !virtualInstance.Spec.Resources.EphemeralStorage.Limit.IsZero() {
-			resList.Limits[corev1.ResourceEphemeralStorage] = virtualInstance.Spec.Resources.EphemeralStorage.Limit
-		} else if !virtualInstance.Spec.Storage.Root.Size.IsZero() {
-			resList.Limits[corev1.ResourceEphemeralStorage] = virtualInstance.Spec.Storage.Root.Size
+		if !virtualInstance.Spec.Resources.Storage.Limit.IsZero() {
+			resList.Limits[corev1.ResourceEphemeralStorage] = virtualInstance.Spec.Resources.Storage.Limit
 		}
 		if len(resList.Requests) > 0 || len(resList.Limits) > 0 {
 			container.Resources = resList
@@ -584,9 +479,7 @@ func (r *VirtualInstanceReconciler) reconcileIngress(ctx context.Context, virtua
 // HÀM CẬP NHẬT TRẠNG THÁI (Status Updating)
 // ============================================================================
 
-func (r *VirtualInstanceReconciler) updateVirtualInstanceStatus(ctx context.Context, virtualInstance *labv1alpha1.VirtualInstance, pod *corev1.Pod, svc *corev1.Service, ing *networkingv1.Ingress, volStatus labv1alpha1.VirtualInstanceVolumesStatus) error {
-	virtualInstance.Status.VolumesStatus = volStatus
-
+func (r *VirtualInstanceReconciler) updateVirtualInstanceStatus(ctx context.Context, virtualInstance *labv1alpha1.VirtualInstance, pod *corev1.Pod, svc *corev1.Service, ing *networkingv1.Ingress) error {
 	if pod != nil {
 		virtualInstance.Status.PodName = pod.Name
 		virtualInstance.Status.PodIP = pod.Status.PodIP

@@ -33,33 +33,21 @@ type VirtualInstanceResourceLimit struct {
 	Limit   resource.Quantity `json:"limit,omitempty"`
 }
 
+// VirtualInstanceStorageLimit định nghĩa giới hạn disk của container.
+// Chỉ có Limit — không có Request vì ephemeral disk không cần scheduler reservation.
+// Map sang Pod resources.limits.ephemeral-storage → kubelet evict pod nếu vượt quá.
+type VirtualInstanceStorageLimit struct {
+	Limit resource.Quantity `json:"limit,omitempty"`
+}
+
 // VirtualInstanceResources gom nhóm tài nguyên tính toán của VirtualInstance
 type VirtualInstanceResources struct {
-	CPU              VirtualInstanceResourceLimit `json:"cpu,omitempty"`
-	Memory           VirtualInstanceResourceLimit `json:"memory,omitempty"`
-	EphemeralStorage VirtualInstanceResourceLimit `json:"ephemeralStorage,omitempty"`
-}
-
-// VirtualInstanceRootVolume định nghĩa ổ đĩa chứa hệ điều hành của Sysbox
-type VirtualInstanceRootVolume struct {
-	Size resource.Quantity `json:"size"`
-	// +kubebuilder:validation:Enum=local;network
-	Type string `json:"type"`
-}
-
-// VirtualInstanceDataVolume định nghĩa các ổ đĩa mount thêm vào (như /var/lib/docker)
-type VirtualInstanceDataVolume struct {
-	Name      string            `json:"name"`
-	MountPath string            `json:"mountPath"`
-	Size      resource.Quantity `json:"size"`
-	// +kubebuilder:validation:Enum=local;network
-	Type string `json:"type"`
-}
-
-// VirtualInstanceStorage gom cấu hình lưu trữ
-type VirtualInstanceStorage struct {
-	Root        VirtualInstanceRootVolume   `json:"root"`
-	DataVolumes []VirtualInstanceDataVolume `json:"dataVolumes,omitempty"`
+	CPU    VirtualInstanceResourceLimit `json:"cpu,omitempty"`
+	Memory VirtualInstanceResourceLimit `json:"memory,omitempty"`
+	// Storage giới hạn tổng disk container (writable layer + logs + /var/lib/docker).
+	// Disk của container hoàn toàn ephemeral — xóa Pod là mất data.
+	// +optional
+	Storage VirtualInstanceStorageLimit `json:"storage,omitempty"`
 }
 
 // VirtualInstancePort định nghĩa các cổng mạng cần mở
@@ -67,18 +55,33 @@ type VirtualInstancePort struct {
 	Name       string `json:"name"`
 	Port       int32  `json:"port"`
 	TargetPort int32  `json:"targetPort"`
-	Expose     bool   `json:"expose"` // Nếu true -> Operator tự động tạo Ingress
+	Expose     bool   `json:"expose"` // Nếu true -> Operator tự động tạo Ingress HTTPS
 }
 
-// VirtualInstanceSpec định nghĩa cấu hình của một máy ảo
+// VirtualInstanceSpec định nghĩa cấu hình của một máy ảo Sysbox
 type VirtualInstanceSpec struct {
-	VirtualClusterRef string                        `json:"virtualClusterRef"`
-	Image             string                        `json:"image"`
-	ImagePullSecrets  []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
-	Hostname          string                        `json:"hostname,omitempty"`
-	Resources         VirtualInstanceResources      `json:"resources,omitempty"`
-	Storage           VirtualInstanceStorage        `json:"storage,omitempty"`
-	Ports             []VirtualInstancePort         `json:"ports,omitempty"`
+	// VirtualClusterRef là tên VirtualCluster cha — Operator sẽ tạo Pod trong namespace của cụm đó
+	VirtualClusterRef string `json:"virtualClusterRef"`
+
+	// Image của container (mặc định: ubuntu:24.04)
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// ImagePullSecrets để pull image từ private registry
+	// +optional
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+
+	// Hostname tùy chỉnh bên trong máy ảo (vd: "controlplane", "worker1")
+	// +optional
+	Hostname string `json:"hostname,omitempty"`
+
+	// Resources định nghĩa giới hạn CPU, Memory và Ephemeral Storage
+	// +optional
+	Resources VirtualInstanceResources `json:"resources,omitempty"`
+
+	// Ports khai báo các cổng mạng cần expose
+	// +optional
+	Ports []VirtualInstancePort `json:"ports,omitempty"`
 }
 
 // ============================================================================
@@ -89,40 +92,24 @@ type VirtualInstanceSpec struct {
 type VirtualInstanceAccessEndpoint struct {
 	Name            string `json:"name"`
 	Protocol        string `json:"protocol"`
-	URL             string `json:"url,omitempty"`   // URL external qua Ingress (nếu Expose=true)
-	InternalAddress string `json:"internalAddress"` // Địa chỉ dùng để gọi nội bộ trong VirtualCluster
-}
-
-// VirtualInstanceVolumeStatusDetail chứa trạng thái của từng PVC
-type VirtualInstanceVolumeStatusDetail struct {
-	Name    string `json:"name,omitempty"` // Tên volume (trống nếu là RootVolume)
-	PVCName string `json:"pvcName"`
-	// +kubebuilder:validation:Enum=Pending;Bound;Lost;Failed
-	Status string `json:"status"`
-}
-
-// VirtualInstanceVolumesStatus gom nhóm trạng thái toàn bộ ổ đĩa của máy ảo
-type VirtualInstanceVolumesStatus struct {
-	RootVolume  VirtualInstanceVolumeStatusDetail   `json:"rootVolume,omitempty"`
-	DataVolumes []VirtualInstanceVolumeStatusDetail `json:"dataVolumes,omitempty"`
+	URL             string `json:"url,omitempty"`             // URL external qua Ingress (nếu Expose=true)
+	InternalAddress string `json:"internalAddress,omitempty"` // Địa chỉ gọi nội bộ trong VirtualCluster
 }
 
 // VirtualInstanceStatus định nghĩa trạng thái quan sát được của VirtualInstance
 type VirtualInstanceStatus struct {
+	// Phase thể hiện trạng thái máy ảo
 	// +kubebuilder:validation:Enum=Pending;Creating;Running;Stopped;Failed
 	Phase string `json:"phase,omitempty"`
 
-	// Tên Pod và IP thực tế dưới K8s
+	// PodName và PodIP thực tế dưới K8s
 	PodName string `json:"podName,omitempty"`
 	PodIP   string `json:"podIP,omitempty"`
 
-	// Danh sách các link/endpoint cho UI hiển thị
+	// AccessEndpoints là danh sách link/endpoint cho UI hiển thị nút bấm kết nối
 	AccessEndpoints []VirtualInstanceAccessEndpoint `json:"accessEndpoints,omitempty"`
 
-	// Trạng thái đính kèm của các ổ đĩa
-	VolumesStatus VirtualInstanceVolumesStatus `json:"volumesStatus,omitempty"`
-
-	// Chuẩn báo cáo điều kiện K8s
+	// Conditions dùng chuẩn metav1.Condition của K8s để báo cáo trạng thái chi tiết
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map

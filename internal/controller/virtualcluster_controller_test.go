@@ -64,8 +64,7 @@ var _ = Describe("VirtualCluster Controller", func() {
 								Memory: labv1alpha1.VirtualClusterResourceLimit{Limit: resource.MustParse("4Gi")},
 							},
 							Storage: labv1alpha1.VirtualClusterStorageQuota{
-								LocalLimit:   resource.MustParse("20Gi"),
-								NetworkLimit: resource.MustParse("10Gi"),
+								Limit: resource.MustParse("30Gi"),
 							},
 							Objects: labv1alpha1.VirtualClusterObjectsQuota{
 								PodsLimit:     20,

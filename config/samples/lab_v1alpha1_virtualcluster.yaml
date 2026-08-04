@@ -16,8 +16,7 @@ spec:
       memory:
         limit: "4Gi"
     storage:
-      localLimit: "20Gi"
-      networkLimit: "10Gi"
+      limit: "30Gi"
     objects:
       podsLimit: 20
       servicesLimit: 10

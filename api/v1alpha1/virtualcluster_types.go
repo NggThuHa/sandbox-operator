@@ -33,10 +33,10 @@ type VirtualClusterNetworkConfig struct {
 	Type string `json:"type"`
 }
 
-// VirtualClusterStorageQuota định nghĩa giới hạn dung lượng lưu trữ
+// VirtualClusterStorageQuota định nghĩa giới hạn dung lượng ephemeral storage (emptyDir) của toàn VirtualCluster
+// Được map tới K8s ResourceQuota field: limits.ephemeral-storage
 type VirtualClusterStorageQuota struct {
-	LocalLimit   resource.Quantity `json:"localLimit"`
-	NetworkLimit resource.Quantity `json:"networkLimit"`
+	Limit resource.Quantity `json:"limit"`
 }
 
 // VirtualClusterResourceLimit định nghĩa cấu trúc có chứa trường limit cho CPU/Memory
@@ -82,10 +82,9 @@ type VirtualClusterInstanceCount struct {
 	Ready int32 `json:"ready"`
 }
 
-// VirtualClusterStorageUsage thống kê dung lượng lưu trữ đã sử dụng
+// VirtualClusterStorageUsage thống kê ephemeral storage đã sử dụng trong VirtualCluster
 type VirtualClusterStorageUsage struct {
-	LocalUsed   resource.Quantity `json:"localUsed,omitempty"`
-	NetworkUsed resource.Quantity `json:"networkUsed,omitempty"`
+	Used resource.Quantity `json:"used,omitempty"`
 }
 
 // VirtualClusterComputeUsage thống kê CPU và RAM đã sử dụng

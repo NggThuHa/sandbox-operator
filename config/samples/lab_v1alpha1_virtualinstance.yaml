@@ -18,15 +18,8 @@ spec:
     memory:
       request: "512Mi"
       limit: "1Gi"
-  storage:
-    root:
-      size: "10Gi"
-      type: local
-    dataVolumes:
-      - name: docker-data
-        mountPath: /var/lib/docker
-        size: "20Gi"
-        type: network
+    storage:
+      limit: "20Gi"
   ports:
     - name: terminal
       port: 8080

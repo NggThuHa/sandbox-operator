@@ -57,10 +57,9 @@ var _ = Describe("VirtualInstance Controller", func() {
 					Spec: labv1alpha1.VirtualInstanceSpec{
 						VirtualClusterRef: "parent-virtualcluster-mock",
 						Image:             "ubuntu:24.04",
-						Storage: labv1alpha1.VirtualInstanceStorage{
-							Root: labv1alpha1.VirtualInstanceRootVolume{
-								Size: resource.MustParse("10Gi"),
-								Type: "local",
+						Resources: labv1alpha1.VirtualInstanceResources{
+							Storage: labv1alpha1.VirtualInstanceStorageLimit{
+								Limit: resource.MustParse("10Gi"),
 							},
 						},
 					},

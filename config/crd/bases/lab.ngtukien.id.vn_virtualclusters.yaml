@@ -123,24 +123,18 @@ spec:
                     - servicesLimit
                     type: object
                   storage:
-                    description: VirtualClusterStorageQuota định nghĩa giới hạn dung
-                      lượng lưu trữ
+                    description: |-
+                      VirtualClusterStorageQuota định nghĩa giới hạn dung lượng ephemeral storage (emptyDir) của toàn VirtualCluster
+                      Được map tới K8s ResourceQuota field: limits.ephemeral-storage
                     properties:
-                      localLimit:
-                        anyOf:
-                        - type: integer
-                        - type: string
-                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                        x-kubernetes-int-or-string: true
-                      networkLimit:
+                      limit:
                         anyOf:
                         - type: integer
                         - type: string
                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                         x-kubernetes-int-or-string: true
                     required:
-                    - localLimit
-                    - networkLimit
+                    - limit
                     type: object
                 required:
                 - compute
@@ -281,16 +275,10 @@ spec:
                         type: integer
                     type: object
                   storage:
-                    description: VirtualClusterStorageUsage thống kê dung lượng lưu
-                      trữ đã sử dụng
+                    description: VirtualClusterStorageUsage thống kê ephemeral storage
+                      đã sử dụng trong VirtualCluster
                     properties:
-                      localUsed:
-                        anyOf:
-                        - type: integer
-                        - type: string
-                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                        x-kubernetes-int-or-string: true
-                      networkUsed:
+                      used:
                         anyOf:
                         - type: integer
                         - type: string

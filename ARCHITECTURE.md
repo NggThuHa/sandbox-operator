@@ -25,8 +25,10 @@ spec:
   # Giới hạn tài nguyên (Quota) cho toàn bộ cụm
   quota:
     storage:
-      localLimit: "50Gi"    # Giới hạn tổng dung lượng ổ cứng vật lý trên node (local-path)
-      networkLimit: "10Gi"  # Giới hạn tổng dung lượng trên hệ thống lưu trữ mạng (longhorn)
+      # Tổng limits.ephemeral-storage của tất cả container trong namespace không vượt quá 30Gi
+      # Với mỗi VirtualInstance khai báo storage.limit: 20Gi
+      # → Namespace này tối đa chứa 1 VirtualInstance (20Gi < 30Gi), từ thứ 2 sẽ bị từ chối
+      limit: "30Gi"
     
     compute:
       cpu:
@@ -64,8 +66,7 @@ status:
       cpuUsed: "1500m"     # Đã xài 1.5 core / Limit: 4 core
       memoryUsed: "3Gi"    # Đã xài 3GB / Limit: 8GB
     storage:
-      localUsed: "25Gi"    # Đã xài 25GB / Limit: 50GB
-      networkUsed: "5Gi"   # Đã xài 5GB / Limit: 10GB
+      used: "12Gi"  # Tổng ephemeral-storage đang dùng / Limit: 30Gi
     objects:
       podsUsed: 2          # Số lượng Pods thực tế trên K8s mẹ / Limit: 15
       servicesUsed: 1      # Số lượng Services đã tạo / Limit: 5
@@ -125,28 +126,9 @@ spec:
     memory:
       request: "1Gi"
       limit: "2Gi"
-    ephemeralStorage:                  # Giới hạn dung lượng rác/tạm trên RootFS của Node
-      limit: "10Gi"
-
-  storage:
-    # Ổ đĩa root (OS) mặc định dùng local để boot nhanh và I/O cao cho Sysbox Docker engine
-    root:
-      size: "10Gi"
-      type: "local" 
-    
-    # Khai báo các volume gắn thêm
-    dataVolumes:
-      # 1. LOCAL STORAGE: Dành cho những thư mục cần I/O cực cao, không cần lưu trữ phân tán lâu dài
-      - name: docker-cache
-        mountPath: "/var/lib/docker"
-        size: "20Gi"
-        type: "local"
-      
-      # 2. NETWORK STORAGE: Dành cho thư mục chứa code, bài làm của sinh viên cần giữ lại bền bỉ
-      - name: student-workspace
-        mountPath: "/home/ubuntu/workspace"
-        size: "5Gi"
-        type: "network"
+    storage:
+      limit: "20Gi"           # Giới hạn tổng disk container (writable layer + logs + /var/lib/docker)
+                              # Map sang Pod resources.limits.ephemeral-storage
 
   # CẤU HÌNH MẠNG & PORT
   ports:
@@ -183,18 +165,8 @@ status:
       protocol: "TCP"
       internalAddress: "http://sample-virtualinstance-master-svc.sample-virtualcluster-x7z9a.svc.cluster.local:22"
   
-  # Trạng thái của các ổ đĩa (PVCs) đã đính kèm vào máy ảo
-  volumesStatus:
-    rootVolume:
-      pvcName: "sample-virtualinstance-master-root-pvc"
-      status: "Bound"
-    dataVolumes:
-      - name: "docker-cache"
-        pvcName: "sample-virtualinstance-master-docker-cache-pvc"
-        status: "Bound"
-      - name: "student-workspace"
-        pvcName: "sample-virtualinstance-master-student-workspace-pvc"
-        status: "Bound"
+  # Không có volumesStatus vì không dùng volume rìiêng
+  # Disk được kiểm soát qua ephemeral-storage limit trên container
 
   # Chuẩn điều kiện Kubernetes (metav1.Condition)
   conditions:
@@ -253,7 +225,7 @@ func (r *VirtualClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 ## 2.2. VirtualInstance Controller (`internal/controller/virtualinstance_controller.go`)
 
-Controller này đóng vai trò là **"Người vận hành máy ảo"**, chịu trách nhiệm lắp ráp Pod (Sysbox runtime), gắn ổ cứng, cấu hình dịch vụ mạng và tổng hợp danh sách URL bảo mật.
+Controller này đóng vai trò là **"Người vận hành máy ảo"**, chịu trách nhiệm lắp ráp Pod (Sysbox runtime), cấu hình dịch vụ mạng và tổng hợp danh sách URL bảo mật.
 
 ### Các hàm kiến tạo tài nguyên & Xác thực (Resource Provisioning)
 
@@ -261,10 +233,8 @@ Controller này đóng vai trò là **"Người vận hành máy ảo"**, chịu
 * `resolveParentVirtualCluster(ctx, virtualInstance)` *(Bước xác thực tiên quyết & Gán OwnerReference)*:
   * **Nhiệm vụ:** Đọc trường `spec.virtualClusterRef`, tìm `VirtualCluster` cha trong cùng Namespace mẹ để kiểm tra xem đã ở phase `Running` hay chưa.
   * **Xử lý Logic:** Nếu cụm cha chưa sẵn sàng -> Báo `Phase: Pending / WaitingForCluster`. Nếu cụm cha đã sẵn sàng -> Thiết lập **`OwnerReference` của VirtualInstance trỏ về VirtualCluster** (giúp Cascade delete các CR) và lấy chuỗi `status.targetNamespace` làm địa bàn triển khai workload bên dưới.
-* `reconcilePVCs(ctx, virtualInstance, targetNamespace)`:
-  * **Nhiệm vụ:** Duyệt qua mảng `spec.storage.dataVolumes` (và cả root volume). Khảo sát cấu hình từ `utils.GetStorageClassName()` và khởi tạo các `PersistentVolumeClaim`.
-* `reconcileSysboxPod(ctx, virtualInstance, targetNamespace, pvcMap)`:
-  * **Nhiệm vụ:** Tạo `corev1.Pod` mang bóng dáng của một máy ảo Sysbox Docker-in-Docker với `runtimeClassName: sysbox-runc`.
+* `reconcileSysboxPod(ctx, virtualInstance, targetNamespace)`:
+  * **Nhiệm vụ:** Tạo `corev1.Pod` với `runtimeClassName: sysbox-runc`, set `resources.limits.ephemeral-storage` từ `spec.resources.storage.limit`. Không tạo PVC hay emptyDir riêng.
 * `reconcileServices(ctx, virtualInstance, targetNamespace)`:
   * **Nhiệm vụ:** Duyệt mảng `spec.ports` và tạo `corev1.Service` (`ClusterIP`).
 * `reconcileIngress(ctx, virtualInstance, virtualCluster, targetNamespace, svc)`:
@@ -289,10 +259,11 @@ func (r *VirtualInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 ## 2.3. Khối tiện ích dùng chung (Package `internal/utils`)
 
-* `GetStorageClassName(volumeType string) string`: Trả về StorageClass thích hợp từ biến môi trường (`DEFAULT_LOCAL_STORAGE_CLASS` / `DEFAULT_NETWORK_STORAGE_CLASS`).
 * `GetIngressClassName() string`: Đọc biến môi trường `DEFAULT_INGRESS_CLASS` (mặc định: `nginx`).
 * `GenerateIngressHost(instanceName, clusterName, customDomain string) string`: Sinh tên miền động cho máy ảo.
 * `GenerateTargetNamespace(virtualClusterName string) string`: Chuẩn hóa độ dài tên Namespace trong ngưỡng 63 ký tự kết hợp băm SHA-1 chống va chạm.
+
+> **Đã loại bỏ:** `GetStorageClassName()` — không còn cần thiết vì không dùng StorageClass nữa.
 
 ---
 
@@ -330,7 +301,7 @@ func (r *VirtualInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
   // +kubebuilder:rbac:groups=lab.devops.toiyeuptit.com,resources=virtualinstances/status,verbs=get;update;patch
   // +kubebuilder:rbac:groups=lab.devops.toiyeuptit.com,resources=virtualinstances/finalizers,verbs=update
   // +kubebuilder:rbac:groups=lab.devops.toiyeuptit.com,resources=virtualclusters,verbs=get;list;watch
-  // +kubebuilder:rbac:groups=core,resources=pods;services;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+  // +kubebuilder:rbac:groups=core,resources=pods;services,verbs=get;list;watch;create;update;patch;delete
   // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
   // +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
   ```
@@ -380,9 +351,8 @@ spec:
     pods: "15"
     services: "5"
     
-    # Quota Ổ cứng theo từng StorageClass
-    local-path.storageclass.storage.k8s.io/requests.storage: "50Gi"    # Quota đĩa local
-    longhorn.storageclass.storage.k8s.io/requests.storage: "10Gi"      # Quota đĩa network
+    # Quota Ephemeral Storage (emptyDir trên disk node) — không cần StorageClass
+    limits.ephemeral-storage: "30Gi"
 ```
 
 ### 4.1.3. NetworkPolicy (Tường lửa Giao thoa Mạng)
@@ -439,46 +409,10 @@ spec:
 
 Khi khởi tạo một đối tượng `VirtualInstance` trong cụm Lab có sẵn, Operator sẽ tự động lắp ráp bộ tứ tài nguyên workload dưới đây:
 
-### 4.2.1. PersistentVolumeClaim (Ổ cứng Root và Data)
-Operator tự động phân tách cấu hình `storage` thành các PVC tương ứng, gán tên chuẩn hóa và liên kết chính xác nhãn quản trị:
-```yaml
-# 1a. Ổ đĩa gốc cho hệ thống container bên trong (Root Volume)
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: virtualinstance-sample-root-pvc
-  namespace: lab-virtualcluster-sample
-  labels:
-    app.kubernetes.io/managed-by: typ-operator
-    lab.devops.toiyeuptit.com/virtual-cluster: virtualcluster-sample
-    lab.devops.toiyeuptit.com/virtual-instance: virtualinstance-sample
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: local-path             # Chuyển đổi từ type: local
-  resources:
-    requests:
-      storage: 10Gi
+### 4.2.1. Storage (Ephemeral — không có volume riêng)
+Không dùng PVC hay emptyDir riêng. Disk của container được kiểm soát hoàn toàn qua `resources.limits.ephemeral-storage` trên Pod.
 
----
-# 1b. Ổ đĩa gắn kèm (Data Volume)
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: virtualinstance-sample-docker-data-pvc
-  namespace: lab-virtualcluster-sample
-  labels:
-    app.kubernetes.io/managed-by: typ-operator
-    lab.devops.toiyeuptit.com/virtual-cluster: virtualcluster-sample
-    lab.devops.toiyeuptit.com/virtual-instance: virtualinstance-sample
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: longhorn               # Chuyển đổi từ type: network
-  resources:
-    requests:
-      storage: 20Gi
-```
+Khi Pod bị xóa → toàn bộ data (bao gồm Docker images học viên kéo vào) được xóa theo — đúng với tính chất ephemeral của lab session.
 
 ### 4.2.2. Pod (Máy ảo Docker-in-Docker chạy Sysbox Runtime)
 Cấu hình Pod được Operator lắp ráp với đầy đủ các thuộc tính bảo mật Sysbox, cô lập User-Namespace và chia sẻ thông số từ `lxcfs`:
@@ -515,16 +449,14 @@ spec:
           protocol: TCP
       resources:
         requests:
-          cpu: "500m"
-          memory: "512Mi"
+          cpu: "500m"          # ← spec.resources.cpu.request
+          memory: "512Mi"      # ← spec.resources.memory.request
         limits:
-          cpu: "1"
-          memory: "1Gi"
-          ephemeral-storage: "10Gi"          # Quota bảo vệ ổ cứng Node vật lý
+          cpu: "1"             # ← spec.resources.cpu.limit
+          memory: "1Gi"        # ← spec.resources.memory.limit
+          ephemeral-storage: "20Gi"  # ← spec.resources.ephemeralStorage.limit
+                                      # Bao gồm writable layer + logs + /var/lib/docker
       volumeMounts:
-        # Mount các ổ cứng PVC thực
-        - name: vol-0
-          mountPath: /var/lib/docker
         # Mount toàn bộ các điểm báo cáo thông lượng LXCFS từ Host vào /proc
         - name: lxcfs-proc-cpuinfo
           mountPath: /proc/cpuinfo
@@ -537,9 +469,7 @@ spec:
         - name: lxcfs-proc-uptime
           mountPath: /proc/uptime
   volumes:
-    - name: vol-0
-      persistentVolumeClaim:
-        claimName: virtualinstance-sample-root-pvc
+    # Không có emptyDir — disk được kiểm soát qua ephemeral-storage limit
     - name: lxcfs-proc-cpuinfo
       hostPath:
         path: /var/lib/lxcfs/proc/cpuinfo

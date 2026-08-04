@@ -53,13 +53,17 @@ spec:
           metadata:
             type: object
           spec:
-            description: VirtualInstanceSpec định nghĩa cấu hình của một máy ảo
+            description: VirtualInstanceSpec định nghĩa cấu hình của một máy ảo Sysbox
             properties:
               hostname:
+                description: 'Hostname tùy chỉnh bên trong máy ảo (vd: "controlplane",
+                  "worker1")'
                 type: string
               image:
+                description: 'Image của container (mặc định: ubuntu:24.04)'
                 type: string
               imagePullSecrets:
+                description: ImagePullSecrets để pull image từ private registry
                 items:
                   description: |-
                     LocalObjectReference contains enough information to let you locate the
@@ -78,6 +82,7 @@ spec:
                   x-kubernetes-map-type: atomic
                 type: array
               ports:
+                description: Ports khai báo các cổng mạng cần expose
                 items:
                   description: VirtualInstancePort định nghĩa các cổng mạng cần mở
                   properties:
@@ -99,27 +104,10 @@ spec:
                   type: object
                 type: array
               resources:
-                description: VirtualInstanceResources gom nhóm tài nguyên tính toán
-                  của VirtualInstance
+                description: Resources định nghĩa giới hạn CPU, Memory và Ephemeral
+                  Storage
                 properties:
                   cpu:
-                    description: VirtualInstanceResourceLimit định nghĩa CPU/Memory
-                      request và limit
-                    properties:
-                      limit:
-                        anyOf:
-                        - type: integer
-                        - type: string
-                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                        x-kubernetes-int-or-string: true
-                      request:
-                        anyOf:
-                        - type: integer
-                        - type: string
-                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                        x-kubernetes-int-or-string: true
-                    type: object
-                  ephemeralStorage:
                     description: VirtualInstanceResourceLimit định nghĩa CPU/Memory
                       request và limit
                     properties:
@@ -153,63 +141,24 @@ spec:
                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                         x-kubernetes-int-or-string: true
                     type: object
-                type: object
-              storage:
-                description: VirtualInstanceStorage gom cấu hình lưu trữ
-                properties:
-                  dataVolumes:
-                    items:
-                      description: VirtualInstanceDataVolume định nghĩa các ổ đĩa
-                        mount thêm vào (như /var/lib/docker)
-                      properties:
-                        mountPath:
-                          type: string
-                        name:
-                          type: string
-                        size:
-                          anyOf:
-                          - type: integer
-                          - type: string
-                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                          x-kubernetes-int-or-string: true
-                        type:
-                          enum:
-                          - local
-                          - network
-                          type: string
-                      required:
-                      - mountPath
-                      - name
-                      - size
-                      - type
-                      type: object
-                    type: array
-                  root:
-                    description: VirtualInstanceRootVolume định nghĩa ổ đĩa chứa hệ
-                      điều hành của Sysbox
+                  storage:
+                    description: |-
+                      Storage giới hạn tổng disk container (writable layer + logs + /var/lib/docker).
+                      Disk của container hoàn toàn ephemeral — xóa Pod là mất data.
                     properties:
-                      size:
+                      limit:
                         anyOf:
                         - type: integer
                         - type: string
                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                         x-kubernetes-int-or-string: true
-                      type:
-                        enum:
-                        - local
-                        - network
-                        type: string
-                    required:
-                    - size
-                    - type
                     type: object
-                required:
-                - root
                 type: object
               virtualClusterRef:
+                description: VirtualClusterRef là tên VirtualCluster cha — Operator
+                  sẽ tạo Pod trong namespace của cụm đó
                 type: string
             required:
-            - image
             - virtualClusterRef
             type: object
           status:
@@ -217,7 +166,8 @@ spec:
               của VirtualInstance
             properties:
               accessEndpoints:
-                description: Danh sách các link/endpoint cho UI hiển thị
+                description: AccessEndpoints là danh sách link/endpoint cho UI hiển
+                  thị nút bấm kết nối
                 items:
                   description: VirtualInstanceAccessEndpoint chứa thông tin URL để
                     sinh viên bấm vào truy cập ngay
@@ -231,13 +181,13 @@ spec:
                     url:
                       type: string
                   required:
-                  - internalAddress
                   - name
                   - protocol
                   type: object
                 type: array
               conditions:
-                description: Chuẩn báo cáo điều kiện K8s
+                description: Conditions dùng chuẩn metav1.Condition của K8s để báo
+                  cáo trạng thái chi tiết
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -297,6 +247,7 @@ spec:
                 - type
                 x-kubernetes-list-type: map
               phase:
+                description: Phase thể hiện trạng thái máy ảo
                 enum:
                 - Pending
                 - Creating
@@ -307,52 +258,8 @@ spec:
               podIP:
                 type: string
               podName:
-                description: Tên Pod và IP thực tế dưới K8s
+                description: PodName và PodIP thực tế dưới K8s
                 type: string
-              volumesStatus:
-                description: Trạng thái đính kèm của các ổ đĩa
-                properties:
-                  dataVolumes:
-                    items:
-                      description: VirtualInstanceVolumeStatusDetail chứa trạng thái
-                        của từng PVC
-                      properties:
-                        name:
-                          type: string
-                        pvcName:
-                          type: string
-                        status:
-                          enum:
-                          - Pending
-                          - Bound
-                          - Lost
-                          - Failed
-                          type: string
-                      required:
-                      - pvcName
-                      - status
-                      type: object
-                    type: array
-                  rootVolume:
-                    description: VirtualInstanceVolumeStatusDetail chứa trạng thái
-                      của từng PVC
-                    properties:
-                      name:
-                        type: string
-                      pvcName:
-                        type: string
-                      status:
-                        enum:
-                        - Pending
-                        - Bound
-                        - Lost
-                        - Failed
-                        type: string
-                    required:
-                    - pvcName
-                    - status
-                    type: object
-                type: object
             type: object
         type: object
     served: true
