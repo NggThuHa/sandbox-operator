@@ -1,4 +1,4 @@
-module github.com/kubeclass/systemd-operator
+module github.com/ngtukien/systemd-operator
 
 go 1.26.0
 

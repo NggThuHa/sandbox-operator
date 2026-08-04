@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.21.0
-  name: virtualclusters.lab.kubeclass.io
+  name: virtualclusters.lab.ngtukien.id.vn
 spec:
-  group: lab.kubeclass.io
+  group: lab.ngtukien.id.vn
   names:
     kind: VirtualCluster
     listKind: VirtualClusterList

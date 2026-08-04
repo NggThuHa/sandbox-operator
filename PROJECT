@@ -3,46 +3,28 @@
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
 cliVersion: 4.15.0
-domain: kubeclass.io
+domain: ngtukien.id.vn
 layout:
 - go.kubebuilder.io/v4
 projectName: systemd-operator
-repo: github.com/kubeclass/systemd-operator
+repo: github.com/ngtukien/systemd-operator
 resources:
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: kubeclass.io
+  domain: ngtukien.id.vn
   group: lab
-  kind: Instance
-  path: github.com/kubeclass/systemd-operator/api/v1alpha1
+  kind: VirtualInstance
+  path: github.com/ngtukien/systemd-operator/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: kubeclass.io
+  domain: ngtukien.id.vn
   group: lab
-  kind: Cluster
-  path: github.com/kubeclass/systemd-operator/api/v1alpha1
-  version: v1alpha1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: kubeclass.io
-  group: lab
-  kind: VCluster
-  path: github.com/kubeclass/systemd-operator/api/v1alpha1
-  version: v1alpha1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: kubeclass.io
-  group: lab
-  kind: VInstance
-  path: github.com/kubeclass/systemd-operator/api/v1alpha1
+  kind: VirtualCluster
+  path: github.com/ngtukien/systemd-operator/api/v1alpha1
   version: v1alpha1
 version: "3"
