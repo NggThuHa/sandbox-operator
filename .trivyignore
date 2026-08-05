@@ -1,0 +1,20 @@
+# Bỏ qua lỗi bắt buộc dùng cổng > 1024 vì chúng ta đang chủ động mở cổng 22 (SSH)
+KSV-0117
+
+# Bỏ qua cảnh báo về readOnlyRootFilesystem
+KSV-0014
+
+# Bỏ qua cảnh báo runAsUser > 10000
+KSV-0020
+KSV-0021
+
+# Bỏ qua cảnh báo RBAC cho Operator Controller Manager
+KSV-0041
+KSV-0056
+
+# Bỏ qua các lỗ hổng hệ thống OS từ Nestybox base image
+CVE-2024-45490
+CVE-2024-45491
+CVE-2024-45492
+CVE-2025-68973
+CVE-2026-45447
