@@ -230,5 +230,5 @@ Bộ điều khiển Operator có khả năng tinh chỉnh linh hoạt lớp lư
 * **Bảo đảm Dọn Sạch Sẽ (Garbage Collection):** Xóa `VirtualCluster` gốc sẽ phát đi tín hiệu qua Garbage Collector K8s tự động dọn sạch an toàn toàn bộ Pods, PVCs, NetworkPolicies và Services trong Namespace tương ứng!
 
 ---
-*Phát triển bởi Đội ngũ Kiến Trúc Sư Hệ Thống — **ToiYeuPTIT Dev** (2026).*  
+*Phát triển bởi **Nguyễn Tự Kiên** (2026).*  
 *Licensed under the Apache License, Version 2.0.*
