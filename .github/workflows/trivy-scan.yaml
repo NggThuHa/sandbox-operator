@@ -29,11 +29,11 @@ jobs:
           exit-code: '1'      # Cảnh báo: Sẽ đánh trượt Pipeline nếu phát hiện lỗi ở các file yaml
           severity: 'CRITICAL,HIGH'
 
-      # Bước 2: Build Docker Image (Ví dụ với bản HuggingFace)
-      - name: Build Docker Image (HuggingFace)
+      # Bước 2: Build Docker Image (Docker Lab)
+      - name: Build Docker Image (Docker Lab)
         if: always()
         run: |
-          docker build -t ghcr.io/ngtukien/jupiter-container:huggingface -f images/Dockerfile.container-huggingface images/
+          docker build -t ghcr.io/ngtukien/systemd-operator/docker-lab:latest -f images/Dockerfile.docker-lab images/
 
       # Bước 3: Quét lỗ hổng phần mềm (CVEs) trong thư viện của Docker Image
       - name: Quét lỗ hổng Image (CVEs)
@@ -43,7 +43,7 @@ jobs:
         continue-on-error: true
         with:
           scan-type: 'image'
-          image-ref: 'ghcr.io/ngtukien/jupiter-container:huggingface'
+          image-ref: 'ghcr.io/ngtukien/systemd-operator/docker-lab:latest'
           trivy-ignores-config: '.trivyignore'
           format: 'table'
           output: 'trivy-image-report.txt'
