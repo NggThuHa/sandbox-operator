@@ -2,7 +2,13 @@ name: Ansible Tests
 
 on:
   push:
+    paths:
+      - 'ansible/**'
+      - '.github/workflows/test-ansible.yml'
   pull_request:
+    paths:
+      - 'ansible/**'
+      - '.github/workflows/test-ansible.yml'
 
 permissions: {}
 

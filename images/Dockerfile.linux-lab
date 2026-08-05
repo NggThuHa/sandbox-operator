@@ -1,4 +1,4 @@
-FROM ghcr.io/nestybox/ubuntu-focal-systemd:3.0
+FROM ghcr.io/nestybox/ubuntu-focal-systemd:latest
 
 ENV DEBIAN_FRONTEND=noninteractive
 

@@ -4,28 +4,28 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install Linux tools, kubectl, Helm, and k3d
 RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends \
-    git git-lfs openssh-client ca-certificates \
-    vim nano less bash-completion tree tmux \
-    curl wget unzip zip tar sudo jq rsync \
-    net-tools iproute2 iputils-ping dnsutils traceroute lsof \
-    htop procps build-essential python3 python3-pip && \
-    # Install kubectl (Latest Stable)
-    KUBECTL_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt) && \
-    curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
-    install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl && \
-    rm kubectl && \
-    # Install Helm 3
-    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash && \
-    # Install k3d (K3s cluster in Docker)
-    curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+  apt-get upgrade -y && \
+  apt-get install -y --no-install-recommends \
+  git git-lfs openssh-client ca-certificates \
+  vim nano less bash-completion tree tmux \
+  curl wget unzip zip tar sudo jq rsync \
+  net-tools iproute2 iputils-ping dnsutils traceroute lsof \
+  htop procps build-essential python3 python3-pip && \
+  # Install kubectl (Latest Stable)
+  KUBECTL_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt) && \
+  curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
+  install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl && \
+  rm kubectl && \
+  # Install Helm 3
+  curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash && \
+  # Install k3d (K3s cluster in Docker)
+  curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash && \
+  apt-get clean && \
+  rm -rf /var/lib/apt/lists/*
 
 # Copy MOTD & Enable Autocompletion for git, kubectl, helm & show MOTD on shell startup
 COPY motd /etc/motd
 RUN echo "source /usr/share/bash-completion/completions/git" >> /etc/bash.bashrc && \
-    echo "source <(kubectl completion bash)" >> /etc/bash.bashrc && \
-    echo "source <(helm completion bash)" >> /etc/bash.bashrc && \
-    echo "cat /etc/motd" >> /etc/bash.bashrc
+  echo "source <(kubectl completion bash)" >> /etc/bash.bashrc && \
+  echo "source <(helm completion bash)" >> /etc/bash.bashrc && \
+  echo "cat /etc/motd" >> /etc/bash.bashrc
