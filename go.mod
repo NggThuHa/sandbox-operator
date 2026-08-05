@@ -1,4 +1,4 @@
-module github.com/ngtukien/systemd-operator
+module github.com/ngtukien/sandbox-operator
 
 go 1.26.0
 

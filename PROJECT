@@ -6,8 +6,8 @@ cliVersion: 4.15.0
 domain: ngtukien.id.vn
 layout:
 - go.kubebuilder.io/v4
-projectName: systemd-operator
-repo: github.com/ngtukien/systemd-operator
+projectName: sandbox-operator
+repo: github.com/ngtukien/sandbox-operator
 resources:
 - api:
     crdVersion: v1
@@ -16,7 +16,7 @@ resources:
   domain: ngtukien.id.vn
   group: lab
   kind: VirtualInstance
-  path: github.com/ngtukien/systemd-operator/api/v1alpha1
+  path: github.com/ngtukien/sandbox-operator/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -25,6 +25,6 @@ resources:
   domain: ngtukien.id.vn
   group: lab
   kind: VirtualCluster
-  path: github.com/ngtukien/systemd-operator/api/v1alpha1
+  path: github.com/ngtukien/sandbox-operator/api/v1alpha1
   version: v1alpha1
 version: "3"

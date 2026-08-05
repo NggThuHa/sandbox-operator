@@ -1,8 +1,8 @@
-# 🚀 KubeEdu Systemd Operator — Cloud-Native Practical Lab & Sandbox Platform
+# 🚀 KubeClass Sandbox Operator — Cloud-Native Practical Lab & Sandbox Platform
 
 ![Kubebuilder](https://img.shields.io/badge/Kubebuilder-v4-blue.svg) ![Kubernetes](https://img.shields.io/badge/Kubernetes-v1.32+-326ce5.svg) ![Go Version](https://img.shields.io/badge/Go-v1.26+-00ADD8.svg) ![Ansible](https://img.shields.io/badge/Ansible-Kubespray%20Style-EE0000.svg)
 
-**KubeEdu Systemd Operator** là bộ điều khiển Kubernetes (Kubernetes Operator) tiêu chuẩn doanh nghiệp của hệ sinh thái **KubeEdu**, chuyên tự động hóa việc khởi tạo và quản trị nền tảng phòng thí nghiệm & Sandbox (Cloud-Native Lab Platform) trên điện toán đám mây, phục vụ tối ưu cho mục đích đào tạo thực thao (University Practical Labs, Coding Bootcamps, DevSecOps Cyber-Range). 
+**KubeClass Sandbox Operator** là bộ điều khiển Kubernetes (Kubernetes Operator) tiêu chuẩn doanh nghiệp của hệ sinh thái **KubeClass**, chuyên tự động hóa việc khởi tạo và quản trị nền tảng phòng thí nghiệm & Sandbox (Cloud-Native Lab Platform) trên điện toán đám mây, phục vụ tối ưu cho mục đích đào tạo thực thao (University Practical Labs, Coding Bootcamps, DevSecOps Cyber-Range). 
 
 Hệ thống tích hợp sâu với **Sysbox Runtime** để vận hành các máy ảo Container (System Containers / Docker-in-Docker với đầy đủ `systemd` gốc) ngay bên trong Kubernetes Pod với hiệu năng cao nhạy bén như máy chủ vật lý, hỗ trợ trọn vẹn kết nối Terminal/VSCode qua Web (WebSocket Secure).
 
@@ -14,7 +14,7 @@ Hệ thống hoạt động dựa trên 2 thực thể Custom Resources chính:
 
 ```mermaid
 graph TD
-    User([🧑‍🎓 Sinh viên / Giảng viên]) -->|Gõ YAML hoặc qua API Web| Operator[⚙️ KubeEdu Systemd Operator]
+    User([🧑‍🎓 Sinh viên / Giảng viên]) -->|Gõ YAML hoặc qua API Web| Operator[⚙️ KubeClass Sandbox Operator]
     Operator -->|Quản trị Không gian Lab| VC[📦 VirtualCluster CRD]
     Operator -->|Quản trị Máy Ảo Lab| VI[🖥️ VirtualInstance CRD]
 
@@ -78,10 +78,10 @@ ansible-playbook cluster.yml -e kubernetes_distro=k3s
 Với các kịch bản cài đặt siêu nhanh (Cloud-init / User-data) hoặc thi hành các playbook cấu hình độc lập file đơn (single-file), bạn có thể dùng `curl` lấy trực tiếp YAML từ GitHub và truyền qua ống dẫn vào `ansible-playbook` mà **không cần chạy lệnh `git clone`**:
 ```bash
 # Thực thi trực tiếp cho máy Local (qua stdin):
-curl -fsSL https://raw.githubusercontent.com/KubeEdu/systemd-operator/main/ansible/<ten-playbook-don>.yml | ansible-playbook -i "localhost," -c local /dev/stdin
+curl -fsSL https://raw.githubusercontent.com/ngtukien/sandbox-operator/main/ansible/<ten-playbook-don>.yml | ansible-playbook -i "localhost," -c local /dev/stdin
 
 # Thực thi trực tiếp cho các máy chủ Remote (qua Process Substitution):
-ansible-playbook -i "192.168.123.124,192.168.123.125," -u ubuntu <(curl -fsSL https://raw.githubusercontent.com/KubeEdu/systemd-operator/main/ansible/<ten-playbook-don>.yml)
+ansible-playbook -i "192.168.123.124,192.168.123.125," -u ubuntu <(curl -fsSL https://raw.githubusercontent.com/ngtukien/sandbox-operator/main/ansible/<ten-playbook-don>.yml)
 ```
 *(Chi tiết tham khảo đầy đủ tại [ansible/README.md](file:///home/ngtukien/Documents/Kubebuilder/ansible/README.md))*
 
@@ -114,17 +114,17 @@ make test
 Dành cho người dùng cuối (End-users / Admin Cụm K8s), bạn có thể chạy duy nhất một lệnh bằng cách tải bundle `install.yaml` từ bản phát hành (Releases) mới nhất, hoặc nạp thẳng Kustomize từ mã nguồn đã pull bằng Ansible trước đó:
 ```bash
 # Lựa chọn A (Từ gói GitHub Releases khi đã tạo tag chính thức v1.x.x):
-kubectl apply -f https://github.com/KubeEdu/systemd-operator/releases/latest/download/install.yaml
+kubectl apply -f https://github.com/ngtukien/sandbox-operator/releases/latest/download/install.yaml
 
 # Lựa chọn B (Trực tiếp từ thư mục Ansible đã pull về máy trước đó):
-kubectl apply -k /tmp/kubeedu-ansible/config/default
+kubectl apply -k /tmp/kubeclass-ansible/config/default
 ```
 > 💡 *File `dist/install.yaml` được tự động sinh ra bằng lệnh `make build-installer IMG=...` và đính kèm vào trang **Releases** của GitHub mỗi khi bạn tạo và đẩy tag phiên bản mới (ví dụ: `git tag v1.0.0 && git push --tags`). Do được quản lý tự động bởi CI/CD nên thư mục `dist/` bị vô hiệu hóa theo dõi trong `.gitignore` của nhánh `main`.*
 
 #### Cách 2: Triển khai cho Nhà Phát Triển từ Mã Nguồn (Developer Mode)
 **Bước 1: Biên dịch và đẩy Docker Image của Operator lên Registry:**
 ```bash
-export IMG="ghcr.io/kubeedu/systemd-operator:v1.0.0"
+export IMG="ghcr.io/ngtukien/sandbox-operator:v1.0.0"
 make docker-build docker-push IMG=$IMG
 ```
 

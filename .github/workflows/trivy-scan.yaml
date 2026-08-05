@@ -33,7 +33,7 @@ jobs:
       - name: Build Docker Image (Docker Lab)
         if: always()
         run: |
-          docker build -t ghcr.io/ngtukien/systemd-operator/docker-lab:latest -f images/Dockerfile.docker-lab images/
+          docker build -t ghcr.io/ngtukien/sandbox-operator/docker-lab:latest -f images/Dockerfile.docker-lab images/
 
       # Bước 3: Quét lỗ hổng phần mềm (CVEs) trong thư viện của Docker Image
       - name: Quét lỗ hổng Image (CVEs)
@@ -43,7 +43,7 @@ jobs:
         continue-on-error: true
         with:
           scan-type: 'image'
-          image-ref: 'ghcr.io/ngtukien/systemd-operator/docker-lab:latest'
+          image-ref: 'ghcr.io/ngtukien/sandbox-operator/docker-lab:latest'
           trivy-ignores-config: '.trivyignore'
           format: 'table'
           output: 'trivy-image-report.txt'

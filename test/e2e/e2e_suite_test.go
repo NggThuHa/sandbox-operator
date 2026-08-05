@@ -28,7 +28,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/ngtukien/systemd-operator/test/utils"
+	"github.com/ngtukien/sandbox-operator/test/utils"
 )
 
 var (
