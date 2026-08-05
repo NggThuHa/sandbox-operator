@@ -4,6 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install Linux utilities, Networking, and Development packages
 RUN apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
     # Git & SSH
     git git-lfs openssh-client ca-certificates \
