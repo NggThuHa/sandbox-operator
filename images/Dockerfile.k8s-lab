@@ -1,3 +1,10 @@
+# Stage 1: Build Runner binary
+FROM golang:1.22-alpine AS runner-builder
+WORKDIR /app
+COPY script/runner.go .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /runner runner.go
+
+# Stage 2: Base Systemd Docker Image
 FROM ghcr.io/nestybox/ubuntu-focal-systemd-docker:latest
 
 # KubeClass K8s-lab Base Image
@@ -30,3 +37,9 @@ RUN echo "source /usr/share/bash-completion/completions/git" >> /etc/bash.bashrc
   echo "source <(kubectl completion bash)" >> /etc/bash.bashrc && \
   echo "source <(helm completion bash)" >> /etc/bash.bashrc && \
   echo "cat /etc/motd" >> /etc/bash.bashrc
+
+# Copy Runner binary & systemd service
+COPY --from=runner-builder /runner /usr/local/bin/runner
+COPY script/runner.service /etc/systemd/system/runner.service
+RUN mkdir -p /etc/systemd/system/multi-user.target.wants && \
+  ln -s /etc/systemd/system/runner.service /etc/systemd/system/multi-user.target.wants/runner.service
