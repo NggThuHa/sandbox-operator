@@ -1,5 +1,7 @@
 FROM ghcr.io/nestybox/ubuntu-focal-systemd:3.0
 
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Install core Linux utilities, Git tooling, Networking, and Development tools
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
