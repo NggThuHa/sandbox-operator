@@ -1,5 +1,6 @@
 FROM ghcr.io/nestybox/ubuntu-focal-systemd-docker:latest
 
+# KubeClass K8s-lab Base Image
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install Linux tools, kubectl, Helm, and k3d

@@ -1,5 +1,6 @@
 FROM ghcr.io/nestybox/ubuntu-focal-systemd:latest
 
+# KubeClass Linux-lab Base Image 
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install core Linux utilities, Git tooling, Networking, and Development tools
