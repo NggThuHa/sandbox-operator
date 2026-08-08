@@ -18,7 +18,10 @@ type CheckResponse struct {
 
 func handleCheck(w http.ResponseWriter, r *http.Request) {
 	var req CheckRequest
-	json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
 
 	// Chạy trực tiếp lệnh kiểm tra trong Pod
 	cmd := exec.Command("bash", "-c", req.Command)
@@ -33,13 +36,18 @@ func handleCheck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	json.NewEncoder(w).Encode(CheckResponse{
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(CheckResponse{
 		ExitCode: exitCode,
 		Stdout:   string(out),
-	})
+	}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }
 
 func main() {
 	http.HandleFunc("/run-check", handleCheck)
-	http.ListenAndServe(":8090", nil)
+	if err := http.ListenAndServe(":8090", nil); err != nil {
+		panic(err)
+	}
 }
