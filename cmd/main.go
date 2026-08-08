@@ -178,18 +178,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&controller.VirtualClusterReconciler{
+	if err := (&controller.ClusterLabReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "virtualcluster")
+		setupLog.Error(err, "Failed to create controller", "controller", "clusterlab")
 		os.Exit(1)
 	}
-	if err := (&controller.VirtualInstanceReconciler{
+	if err := (&controller.InstanceLabReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "virtualinstance")
+		setupLog.Error(err, "Failed to create controller", "controller", "instancelab")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

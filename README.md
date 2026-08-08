@@ -15,10 +15,10 @@ Hệ thống hoạt động dựa trên 2 thực thể Custom Resources chính:
 ```mermaid
 graph TD
     User([🧑‍🎓 Sinh viên / Giảng viên]) -->|Gõ YAML hoặc qua API Web| Operator[⚙️ KubeClass Sandbox Operator]
-    Operator -->|Quản trị Không gian Lab| VC[📦 VirtualCluster CRD]
-    Operator -->|Quản trị Máy Ảo Lab| VI[🖥️ VirtualInstance CRD]
+    Operator -->|Quản trị Không gian Lab| VC[📦 ClusterLab CRD]
+    Operator -->|Quản trị Máy Ảo Lab| VI[🖥️ InstanceLab CRD]
 
-    subgraph "Kubernetes Namespace (Isolated by VirtualCluster)"
+    subgraph "Kubernetes Namespace (Isolated by ClusterLab)"
         VC -->|1. Cấp phát| NS((K8s Namespace))
         VC -->|2. Giám sát Giới hạn| RQ[⚖️ ResourceQuota<br/>CPU / Mem / Storage]
         VC -->|3. Bảo mật Cách ly| NP[🛡️ NetworkPolicy<br/>Block Ingress / Open Egress]
@@ -31,12 +31,12 @@ graph TD
     SVC -->|7. Cấp Đên & Bảo mật SSL| ING[🔒 HTTPS Ingress<br/>Cert-Manager & WSS Terminal]
 ```
 
-### 1. `VirtualCluster` — Cụm Phòng Lab Độc Lập
+### 1. `ClusterLab` — Cụm Phòng Lab Độc Lập
 * **Cách ly vô song (Multi-Tenant Isolation):** Tự động sinh Kubernetes Namespace chuẩn RFC 1123 đi kèm với **NetworkPolicy** (Mặc định cho phép 100% kết nối Egress để sinh viên thoải mái `docker pull`, `git clone`, `apt install`, nhưng phong tỏa chặt chẽ Ingress để chống rò rỉ dữ liệu hay gian lận thi cử giữa các phòng lab).
 * **Quản trị ranh giới tài nguyên (Resource Quotas):** Áp đặt khắt khe giới hạn tối đa CPU, RAM, Storage và số lượng Object thông qua bộ chuẩn `resource.Quantity` chính quy của Kubernetes.
 * **Quy tắc Finalizer-First & Hết hạn thông minh (TTL Anti-Drift):** Cam kết đảm bảo dọn sạch sẽ tài nguyên khi xóa cụm thông qua OwnerReferences và tự động giải tán phòng Lab sau thời gian quy định (`ttl` như `4h`, `120m`) nhằm chống ùn đọng rác trên Cluster.
 
-### 2. `VirtualInstance` — Máy Ảo Thực Thao Sysbox-Ready
+### 2. `InstanceLab` — Máy Ảo Thực Thao Sysbox-Ready
 * **Động cơ Sysbox (`sysbox-runc`):** Vận hành container như một hệ điều hành trọn vẹn (cho phép chạy systemd, Docker, Kubernetes K8s-in-K8s bên trong Pod mà không cần cờ đặc quyền nhạy cảm `privileged: true`).
 * **Hạ tầng Lưu trữ & Truy Cập Động:** 
   * Tự động phán đoán và quy hoạch lớp lưu trữ (`StorageClass`) và lớp điều hướng (`IngressClass`) với 3 tầng ưu tiên: **Biến môi trường ENV > Tùy chỉnh trong Spec > Mặc định hệ thống**.
@@ -138,11 +138,11 @@ make deploy IMG=$IMG
 
 ## 📦 Ví Dụ Kịch Bản Sử Dụng Nhanh (Quickstart Samples)
 
-### 1. Khởi tạo một Cụm Phòng Lab (`VirtualCluster`) cho Sinh viên
-Tạo file `sample-virtualcluster.yaml`:
+### 1. Khởi tạo một Cụm Phòng Lab (`ClusterLab`) cho Sinh viên
+Tạo file `sample-clusterlab.yaml`:
 ```yaml
 apiVersion: lab.devops.toiyeuptit.com/v1alpha1
-kind: VirtualCluster
+kind: ClusterLab
 metadata:
   name: student-devops-lab01
   namespace: default
@@ -166,20 +166,20 @@ spec:
       podsLimit: 20
       servicesLimit: 10
 ```
-Áp dụng lên K8s: `kubectl apply -f sample-virtualcluster.yaml`
+Áp dụng lên K8s: `kubectl apply -f sample-clusterlab.yaml`
 
 ---
 
-### 2. Khởi tạo Máy Ảo Thực Thao (`VirtualInstance`) kèm Terminal Web
-Tạo file `sample-virtualinstance.yaml`:
+### 2. Khởi tạo Máy Ảo Thực Thao (`InstanceLab`) kèm Terminal Web
+Tạo file `sample-instancelab.yaml`:
 ```yaml
 apiVersion: lab.devops.toiyeuptit.com/v1alpha1
-kind: VirtualInstance
+kind: InstanceLab
 metadata:
   name: ubuntu-sysbox-devbox
   namespace: default
 spec:
-  virtualClusterRef: student-devops-lab01
+  clusterLabRef: student-devops-lab01
   image: "ubuntu:24.04"      # Image chuyên dụng cho môn học/thi cử
   runtimeClassName: "sysbox-runc"
   resources:
@@ -204,7 +204,7 @@ spec:
       targetPort: 7681       # Cổng ttyd terminal bên trong Pod
       expose: true           # Tự động cấp domain HTTPS WSS qua Cert-Manager
 ```
-Áp dụng lên K8s: `kubectl apply -f sample-virtualinstance.yaml`
+Áp dụng lên K8s: `kubectl apply -f sample-instancelab.yaml`
 
 ---
 
@@ -225,9 +225,9 @@ Bộ điều khiển Operator có khả năng tinh chỉnh linh hoạt lớp lư
 
 * Toàn bộ tiến độ giải ngân tài nguyên (`Conditions`) và lưu lượng đã dùng (`QuotaUsage`) đều được theo dõi thời gian thực:
   ```bash
-  kubectl get virtualcluster,virtualinstance -A -o wide
+  kubectl get clusterlab,instancelab -A -o wide
   ```
-* **Bảo đảm Dọn Sạch Sẽ (Garbage Collection):** Xóa `VirtualCluster` gốc sẽ phát đi tín hiệu qua Garbage Collector K8s tự động dọn sạch an toàn toàn bộ Pods, PVCs, NetworkPolicies và Services trong Namespace tương ứng!
+* **Bảo đảm Dọn Sạch Sẽ (Garbage Collection):** Xóa `ClusterLab` gốc sẽ phát đi tín hiệu qua Garbage Collector K8s tự động dọn sạch an toàn toàn bộ Pods, PVCs, NetworkPolicies và Services trong Namespace tương ứng!
 
 ---
 *Phát triển bởi **Nguyễn Tự Kiên** (2026).*  

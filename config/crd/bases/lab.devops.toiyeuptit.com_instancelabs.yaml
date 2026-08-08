@@ -4,24 +4,24 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.21.0
-  name: virtualinstances.lab.devops.toiyeuptit.com
+  name: instancelabs.lab.devops.toiyeuptit.com
 spec:
   group: lab.devops.toiyeuptit.com
   names:
-    kind: VirtualInstance
-    listKind: VirtualInstanceList
-    plural: virtualinstances
-    singular: virtualinstance
+    kind: InstanceLab
+    listKind: InstanceLabList
+    plural: instancelabs
+    singular: instancelab
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: The phase of the VirtualInstance
+    - description: The phase of the InstanceLab
       jsonPath: .status.phase
       name: Phase
       type: string
-    - description: The VirtualCluster this instance belongs to
-      jsonPath: .spec.virtualClusterRef
-      name: VirtualCluster
+    - description: The ClusterLab this instance belongs to
+      jsonPath: .spec.clusterLabRef
+      name: ClusterLab
       type: string
     - description: The internal IP of the pod
       jsonPath: .status.podIP
@@ -33,7 +33,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: VirtualInstance is the Schema for the virtualinstances API
+        description: InstanceLab is the Schema for the instancelabs API
         properties:
           apiVersion:
             description: |-
@@ -53,7 +53,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: VirtualInstanceSpec định nghĩa cấu hình của một máy ảo
+            description: InstanceLabSpec định nghĩa cấu hình của một máy ảo
             properties:
               hostname:
                 type: string
@@ -79,7 +79,7 @@ spec:
                 type: array
               ports:
                 items:
-                  description: VirtualInstancePort định nghĩa các cổng mạng cần mở
+                  description: InstanceLabPort định nghĩa các cổng mạng cần mở
                   properties:
                     expose:
                       type: boolean
@@ -99,11 +99,11 @@ spec:
                   type: object
                 type: array
               resources:
-                description: VirtualInstanceResources gom nhóm tài nguyên tính toán
-                  của VirtualInstance
+                description: InstanceLabResources gom nhóm tài nguyên tính toán
+                  của InstanceLab
                 properties:
                   cpu:
-                    description: VirtualInstanceResourceLimit định nghĩa CPU/Memory
+                    description: InstanceLabResourceLimit định nghĩa CPU/Memory
                       request và limit
                     properties:
                       limit:
@@ -120,7 +120,7 @@ spec:
                         x-kubernetes-int-or-string: true
                     type: object
                   ephemeralStorage:
-                    description: VirtualInstanceResourceLimit định nghĩa CPU/Memory
+                    description: InstanceLabResourceLimit định nghĩa CPU/Memory
                       request và limit
                     properties:
                       limit:
@@ -137,7 +137,7 @@ spec:
                         x-kubernetes-int-or-string: true
                     type: object
                   memory:
-                    description: VirtualInstanceResourceLimit định nghĩa CPU/Memory
+                    description: InstanceLabResourceLimit định nghĩa CPU/Memory
                       request và limit
                     properties:
                       limit:
@@ -155,11 +155,11 @@ spec:
                     type: object
                 type: object
               storage:
-                description: VirtualInstanceStorage gom cấu hình lưu trữ
+                description: InstanceLabStorage gom cấu hình lưu trữ
                 properties:
                   dataVolumes:
                     items:
-                      description: VirtualInstanceDataVolume định nghĩa các ổ đĩa
+                      description: InstanceLabDataVolume định nghĩa các ổ đĩa
                         mount thêm vào (như /var/lib/docker)
                       properties:
                         mountPath:
@@ -185,7 +185,7 @@ spec:
                       type: object
                     type: array
                   root:
-                    description: VirtualInstanceRootVolume định nghĩa ổ đĩa chứa hệ
+                    description: InstanceLabRootVolume định nghĩa ổ đĩa chứa hệ
                       điều hành của Sysbox
                     properties:
                       size:
@@ -206,20 +206,20 @@ spec:
                 required:
                 - root
                 type: object
-              virtualClusterRef:
+              clusterLabRef:
                 type: string
             required:
             - image
-            - virtualClusterRef
+            - clusterLabRef
             type: object
           status:
-            description: VirtualInstanceStatus định nghĩa trạng thái quan sát được
-              của VirtualInstance
+            description: InstanceLabStatus định nghĩa trạng thái quan sát được
+              của InstanceLab
             properties:
               accessEndpoints:
                 description: Danh sách các link/endpoint cho UI hiển thị
                 items:
-                  description: VirtualInstanceAccessEndpoint chứa thông tin URL để
+                  description: InstanceLabAccessEndpoint chứa thông tin URL để
                     sinh viên bấm vào truy cập ngay
                   properties:
                     internalAddress:
@@ -314,7 +314,7 @@ spec:
                 properties:
                   dataVolumes:
                     items:
-                      description: VirtualInstanceVolumeStatusDetail chứa trạng thái
+                      description: InstanceLabVolumeStatusDetail chứa trạng thái
                         của từng PVC
                       properties:
                         name:
@@ -334,7 +334,7 @@ spec:
                       type: object
                     type: array
                   rootVolume:
-                    description: VirtualInstanceVolumeStatusDetail chứa trạng thái
+                    description: InstanceLabVolumeStatusDetail chứa trạng thái
                       của từng PVC
                     properties:
                       name:

@@ -26,88 +26,88 @@ import (
 // 1. SPEC STRUCTS (Trạng thái mong muốn từ người dùng)
 // ============================================================================
 
-// VirtualClusterNetworkConfig định nghĩa chế độ mạng của toàn bộ VirtualCluster
-type VirtualClusterNetworkConfig struct {
+// ClusterLabNetworkConfig định nghĩa chế độ mạng của toàn bộ ClusterLab
+type ClusterLabNetworkConfig struct {
 	// Type có thể là: isolate, internal, hoặc external
 	// +kubebuilder:validation:Enum=isolate;internal;external
 	Type string `json:"type"`
 }
 
-// VirtualClusterStorageQuota định nghĩa giới hạn dung lượng ephemeral storage (emptyDir) của toàn VirtualCluster
+// ClusterLabStorageQuota định nghĩa giới hạn dung lượng ephemeral storage (emptyDir) của toàn ClusterLab
 // Được map tới K8s ResourceQuota field: limits.ephemeral-storage
-type VirtualClusterStorageQuota struct {
+type ClusterLabStorageQuota struct {
 	Limit resource.Quantity `json:"limit"`
 }
 
-// VirtualClusterResourceLimit định nghĩa cấu trúc có chứa trường limit cho CPU/Memory
-type VirtualClusterResourceLimit struct {
+// ClusterLabResourceLimit định nghĩa cấu trúc có chứa trường limit cho CPU/Memory
+type ClusterLabResourceLimit struct {
 	Limit resource.Quantity `json:"limit"`
 }
 
-// VirtualClusterComputeQuota định nghĩa giới hạn tài nguyên tính toán
-type VirtualClusterComputeQuota struct {
-	CPU    VirtualClusterResourceLimit `json:"cpu"`
-	Memory VirtualClusterResourceLimit `json:"memory"`
+// ClusterLabComputeQuota định nghĩa giới hạn tài nguyên tính toán
+type ClusterLabComputeQuota struct {
+	CPU    ClusterLabResourceLimit `json:"cpu"`
+	Memory ClusterLabResourceLimit `json:"memory"`
 }
 
-// VirtualClusterObjectsQuota định nghĩa giới hạn số lượng tài nguyên K8s
-type VirtualClusterObjectsQuota struct {
+// ClusterLabObjectsQuota định nghĩa giới hạn số lượng tài nguyên K8s
+type ClusterLabObjectsQuota struct {
 	PodsLimit     int32 `json:"podsLimit"`
 	ServicesLimit int32 `json:"servicesLimit"`
 }
 
-// VirtualClusterQuotaConfig gom nhóm toàn bộ các giới hạn tài nguyên
-type VirtualClusterQuotaConfig struct {
-	Storage VirtualClusterStorageQuota `json:"storage"`
-	Compute VirtualClusterComputeQuota `json:"compute"`
-	Objects VirtualClusterObjectsQuota `json:"objects"`
+// ClusterLabQuotaConfig gom nhóm toàn bộ các giới hạn tài nguyên
+type ClusterLabQuotaConfig struct {
+	Storage ClusterLabStorageQuota `json:"storage"`
+	Compute ClusterLabComputeQuota `json:"compute"`
+	Objects ClusterLabObjectsQuota `json:"objects"`
 }
 
-// VirtualClusterSpec định nghĩa các thông số cấu hình mong muốn cho VirtualCluster
-type VirtualClusterSpec struct {
-	// TTL định nghĩa thời gian sống của cụm Lab, sau thời gian này toàn bộ cụm và VirtualInstance bên trong sẽ bị thu hồi (vd: "4h", "120m")
+// ClusterLabSpec định nghĩa các thông số cấu hình mong muốn cho ClusterLab
+type ClusterLabSpec struct {
+	// TTL định nghĩa thời gian sống của cụm Lab, sau thời gian này toàn bộ cụm và InstanceLab bên trong sẽ bị thu hồi (vd: "4h", "120m")
 	// +optional
-	TTL     string                      `json:"ttl,omitempty"`
-	Network VirtualClusterNetworkConfig `json:"network"`
-	Quota   VirtualClusterQuotaConfig   `json:"quota"`
+	TTL     string                  `json:"ttl,omitempty"`
+	Network ClusterLabNetworkConfig `json:"network"`
+	Quota   ClusterLabQuotaConfig   `json:"quota"`
 }
 
 // ============================================================================
 // 2. STATUS STRUCTS (Trạng thái thực tế do Operator tổng hợp trả về)
 // ============================================================================
 
-// VirtualClusterInstanceCount thống kê số lượng máy ảo trong cụm
-type VirtualClusterInstanceCount struct {
+// ClusterLabInstanceCount thống kê số lượng máy ảo trong cụm
+type ClusterLabInstanceCount struct {
 	Total int32 `json:"total"`
 	Ready int32 `json:"ready"`
 }
 
-// VirtualClusterStorageUsage thống kê ephemeral storage đã sử dụng trong VirtualCluster
-type VirtualClusterStorageUsage struct {
+// ClusterLabStorageUsage thống kê ephemeral storage đã sử dụng trong ClusterLab
+type ClusterLabStorageUsage struct {
 	Used resource.Quantity `json:"used,omitempty"`
 }
 
-// VirtualClusterComputeUsage thống kê CPU và RAM đã sử dụng
-type VirtualClusterComputeUsage struct {
+// ClusterLabComputeUsage thống kê CPU và RAM đã sử dụng
+type ClusterLabComputeUsage struct {
 	CPUUsed    resource.Quantity `json:"cpuUsed,omitempty"`
 	MemoryUsed resource.Quantity `json:"memoryUsed,omitempty"`
 }
 
-// VirtualClusterObjectsUsage thống kê số lượng Pod/Service đã tạo
-type VirtualClusterObjectsUsage struct {
+// ClusterLabObjectsUsage thống kê số lượng Pod/Service đã tạo
+type ClusterLabObjectsUsage struct {
 	PodsUsed     int32 `json:"podsUsed,omitempty"`
 	ServicesUsed int32 `json:"servicesUsed,omitempty"`
 }
 
-// VirtualClusterQuotaUsage gom nhóm thống kê sử dụng thực tế (dùng cho UI hiển thị %)
-type VirtualClusterQuotaUsage struct {
-	Compute VirtualClusterComputeUsage `json:"compute,omitempty"`
-	Storage VirtualClusterStorageUsage `json:"storage,omitempty"`
-	Objects VirtualClusterObjectsUsage `json:"objects,omitempty"`
+// ClusterLabQuotaUsage gom nhóm thống kê sử dụng thực tế (dùng cho UI hiển thị %)
+type ClusterLabQuotaUsage struct {
+	Compute ClusterLabComputeUsage `json:"compute,omitempty"`
+	Storage ClusterLabStorageUsage `json:"storage,omitempty"`
+	Objects ClusterLabObjectsUsage `json:"objects,omitempty"`
 }
 
-// VirtualClusterStatus định nghĩa trạng thái quan sát được của cụm
-type VirtualClusterStatus struct {
+// ClusterLabStatus định nghĩa trạng thái quan sát được của cụm
+type ClusterLabStatus struct {
 	// Phase thể hiện trạng thái tổng thể của cụm
 	// +kubebuilder:validation:Enum=Pending;Provisioning;Running;Degraded;Failed;Terminating
 	Phase string `json:"phase,omitempty"`
@@ -119,10 +119,10 @@ type VirtualClusterStatus struct {
 	ExpiresAt *metav1.Time `json:"expiresAt,omitempty"`
 
 	// InstanceCount đếm số máy ảo hiện tại
-	InstanceCount VirtualClusterInstanceCount `json:"instanceCount,omitempty"`
+	InstanceCount ClusterLabInstanceCount `json:"instanceCount,omitempty"`
 
 	// QuotaUsage thống kê real-time tài nguyên
-	QuotaUsage VirtualClusterQuotaUsage `json:"quotaUsage,omitempty"`
+	QuotaUsage ClusterLabQuotaUsage `json:"quotaUsage,omitempty"`
 
 	// Conditions dùng chuẩn metav1.Condition của K8s để báo cáo trạng thái chi tiết
 	// +patchMergeKey=type
@@ -138,32 +138,32 @@ type VirtualClusterStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase",description="The phase of the VirtualCluster"
+// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase",description="The phase of the ClusterLab"
 // +kubebuilder:printcolumn:name="Namespace",type="string",JSONPath=".status.targetNamespace",description="The target k8s namespace"
 // +kubebuilder:printcolumn:name="Expires At",type="string",JSONPath=".status.expiresAt",description="Expiration timestamp of the lab cluster"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
-// VirtualCluster is the Schema for the virtualclusters API
-type VirtualCluster struct {
+// ClusterLab is the Schema for the clusterlabs API
+type ClusterLab struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   VirtualClusterSpec   `json:"spec,omitempty"`
-	Status VirtualClusterStatus `json:"status,omitempty"`
+	Spec   ClusterLabSpec   `json:"spec,omitempty"`
+	Status ClusterLabStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// VirtualClusterList contains a list of VirtualCluster
-type VirtualClusterList struct {
+// ClusterLabList contains a list of ClusterLab
+type ClusterLabList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []VirtualCluster `json:"items"`
+	Items           []ClusterLab `json:"items"`
 }
 
 func init() {
 	SchemeBuilder.Register(func(s *runtime.Scheme) error {
-		s.AddKnownTypes(SchemeGroupVersion, &VirtualCluster{}, &VirtualClusterList{})
+		s.AddKnownTypes(SchemeGroupVersion, &ClusterLab{}, &ClusterLabList{})
 		return nil
 	})
 }

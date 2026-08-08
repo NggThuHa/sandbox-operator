@@ -7,19 +7,23 @@ metadata:
   labels:
     app.kubernetes.io/name: kubebuilder
     app.kubernetes.io/managed-by: kustomize
-  name: virtualinstance-viewer-role
+  name: clusterlab-editor-role
 rules:
 - apiGroups:
   - lab.devops.toiyeuptit.com
   resources:
-  - virtualinstances
+  - clusterlabs
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - lab.devops.toiyeuptit.com
   resources:
-  - virtualinstances/status
+  - clusterlabs/status
   verbs:
   - get

@@ -29,8 +29,8 @@ rules:
 - apiGroups:
   - lab.devops.toiyeuptit.com
   resources:
-  - virtualclusters
-  - virtualinstances
+  - clusterlabs
+  - instancelabs
   verbs:
   - create
   - delete
@@ -42,15 +42,15 @@ rules:
 - apiGroups:
   - lab.devops.toiyeuptit.com
   resources:
-  - virtualclusters/finalizers
-  - virtualinstances/finalizers
+  - clusterlabs/finalizers
+  - instancelabs/finalizers
   verbs:
   - update
 - apiGroups:
   - lab.devops.toiyeuptit.com
   resources:
-  - virtualclusters/status
-  - virtualinstances/status
+  - clusterlabs/status
+  - instancelabs/status
   verbs:
   - get
   - patch

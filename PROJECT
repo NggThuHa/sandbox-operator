@@ -15,7 +15,7 @@ resources:
   controller: true
   domain: ngtukien.id.vn
   group: lab
-  kind: VirtualInstance
+  kind: InstanceLab
   path: github.com/ngtukien/sandbox-operator/api/v1alpha1
   version: v1alpha1
 - api:
@@ -24,7 +24,7 @@ resources:
   controller: true
   domain: ngtukien.id.vn
   group: lab
-  kind: VirtualCluster
+  kind: ClusterLab
   path: github.com/ngtukien/sandbox-operator/api/v1alpha1
   version: v1alpha1
 version: "3"

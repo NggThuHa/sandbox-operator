@@ -4,24 +4,24 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.21.0
-  name: virtualinstances.lab.ngtukien.id.vn
+  name: instancelabs.lab.ngtukien.id.vn
 spec:
   group: lab.ngtukien.id.vn
   names:
-    kind: VirtualInstance
-    listKind: VirtualInstanceList
-    plural: virtualinstances
-    singular: virtualinstance
+    kind: InstanceLab
+    listKind: InstanceLabList
+    plural: instancelabs
+    singular: instancelab
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: The phase of the VirtualInstance
+    - description: The phase of the InstanceLab
       jsonPath: .status.phase
       name: Phase
       type: string
-    - description: The VirtualCluster this instance belongs to
-      jsonPath: .spec.virtualClusterRef
-      name: VirtualCluster
+    - description: The ClusterLab this instance belongs to
+      jsonPath: .spec.clusterLabRef
+      name: ClusterLab
       type: string
     - description: The internal IP of the pod
       jsonPath: .status.podIP
@@ -33,7 +33,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: VirtualInstance is the Schema for the virtualinstances API
+        description: InstanceLab is the Schema for the instancelabs API
         properties:
           apiVersion:
             description: |-
@@ -53,8 +53,12 @@ spec:
           metadata:
             type: object
           spec:
-            description: VirtualInstanceSpec định nghĩa cấu hình của một máy ảo Sysbox
+            description: InstanceLabSpec định nghĩa cấu hình của một máy ảo Sysbox
             properties:
+              clusterLabRef:
+                description: ClusterLabRef là tên ClusterLab cha — Operator sẽ tạo
+                  Pod trong namespace của cụm đó
+                type: string
               hostname:
                 description: 'Hostname tùy chỉnh bên trong máy ảo (vd: "controlplane",
                   "worker1")'
@@ -84,7 +88,7 @@ spec:
               ports:
                 description: Ports khai báo các cổng mạng cần expose
                 items:
-                  description: VirtualInstancePort định nghĩa các cổng mạng cần mở
+                  description: InstanceLabPort định nghĩa các cổng mạng cần mở
                   properties:
                     expose:
                       type: boolean
@@ -108,8 +112,8 @@ spec:
                   Storage
                 properties:
                   cpu:
-                    description: VirtualInstanceResourceLimit định nghĩa CPU/Memory
-                      request và limit
+                    description: InstanceLabResourceLimit định nghĩa CPU/Memory request
+                      và limit
                     properties:
                       limit:
                         anyOf:
@@ -125,8 +129,8 @@ spec:
                         x-kubernetes-int-or-string: true
                     type: object
                   memory:
-                    description: VirtualInstanceResourceLimit định nghĩa CPU/Memory
-                      request và limit
+                    description: InstanceLabResourceLimit định nghĩa CPU/Memory request
+                      và limit
                     properties:
                       limit:
                         anyOf:
@@ -154,23 +158,19 @@ spec:
                         x-kubernetes-int-or-string: true
                     type: object
                 type: object
-              virtualClusterRef:
-                description: VirtualClusterRef là tên VirtualCluster cha — Operator
-                  sẽ tạo Pod trong namespace của cụm đó
-                type: string
             required:
-            - virtualClusterRef
+            - clusterLabRef
             type: object
           status:
-            description: VirtualInstanceStatus định nghĩa trạng thái quan sát được
-              của VirtualInstance
+            description: InstanceLabStatus định nghĩa trạng thái quan sát được của
+              InstanceLab
             properties:
               accessEndpoints:
                 description: AccessEndpoints là danh sách link/endpoint cho UI hiển
                   thị nút bấm kết nối
                 items:
-                  description: VirtualInstanceAccessEndpoint chứa thông tin URL để
-                    sinh viên bấm vào truy cập ngay
+                  description: InstanceLabAccessEndpoint chứa thông tin URL để sinh
+                    viên bấm vào truy cập ngay
                   properties:
                     internalAddress:
                       type: string

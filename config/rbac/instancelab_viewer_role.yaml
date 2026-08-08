@@ -7,12 +7,12 @@ metadata:
   labels:
     app.kubernetes.io/name: kubebuilder
     app.kubernetes.io/managed-by: kustomize
-  name: virtualcluster-viewer-role
+  name: instancelab-viewer-role
 rules:
 - apiGroups:
   - lab.devops.toiyeuptit.com
   resources:
-  - virtualclusters
+  - instancelabs
   verbs:
   - get
   - list
@@ -20,6 +20,6 @@ rules:
 - apiGroups:
   - lab.devops.toiyeuptit.com
   resources:
-  - virtualclusters/status
+  - instancelabs/status
   verbs:
   - get

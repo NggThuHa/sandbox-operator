@@ -22,11 +22,11 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the kubebuilder itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
-- virtualinstance_admin_role.yaml
-- virtualinstance_editor_role.yaml
-- virtualinstance_viewer_role.yaml
-- virtualcluster_admin_role.yaml
-- virtualcluster_editor_role.yaml
-- virtualcluster_viewer_role.yaml
+- instancelab_admin_role.yaml
+- instancelab_editor_role.yaml
+- instancelab_viewer_role.yaml
+- clusterlab_admin_role.yaml
+- clusterlab_editor_role.yaml
+- clusterlab_viewer_role.yaml
 
 

@@ -7,23 +7,17 @@ metadata:
   labels:
     app.kubernetes.io/name: kubebuilder
     app.kubernetes.io/managed-by: kustomize
-  name: virtualinstance-editor-role
+  name: instancelab-admin-role
 rules:
 - apiGroups:
   - lab.devops.toiyeuptit.com
   resources:
-  - virtualinstances
+  - instancelabs
   verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
+  - '*'
 - apiGroups:
   - lab.devops.toiyeuptit.com
   resources:
-  - virtualinstances/status
+  - instancelabs/status
   verbs:
   - get

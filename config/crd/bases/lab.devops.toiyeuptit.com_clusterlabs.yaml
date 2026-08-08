@@ -4,18 +4,18 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.21.0
-  name: virtualclusters.lab.ngtukien.id.vn
+  name: clusterlabs.lab.devops.toiyeuptit.com
 spec:
-  group: lab.ngtukien.id.vn
+  group: lab.devops.toiyeuptit.com
   names:
-    kind: VirtualCluster
-    listKind: VirtualClusterList
-    plural: virtualclusters
-    singular: virtualcluster
+    kind: ClusterLab
+    listKind: ClusterLabList
+    plural: clusterlabs
+    singular: clusterlab
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: The phase of the VirtualCluster
+    - description: The phase of the ClusterLab
       jsonPath: .status.phase
       name: Phase
       type: string
@@ -33,7 +33,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: VirtualCluster is the Schema for the virtualclusters API
+        description: ClusterLab is the Schema for the clusterlabs API
         properties:
           apiVersion:
             description: |-
@@ -53,12 +53,12 @@ spec:
           metadata:
             type: object
           spec:
-            description: VirtualClusterSpec định nghĩa các thông số cấu hình mong
-              muốn cho VirtualCluster
+            description: ClusterLabSpec định nghĩa các thông số cấu hình mong
+              muốn cho ClusterLab
             properties:
               network:
-                description: VirtualClusterNetworkConfig định nghĩa chế độ mạng của
-                  toàn bộ VirtualCluster
+                description: ClusterLabNetworkConfig định nghĩa chế độ mạng của
+                  toàn bộ ClusterLab
                 properties:
                   type:
                     description: 'Type có thể là: isolate, internal, hoặc external'
@@ -71,15 +71,15 @@ spec:
                 - type
                 type: object
               quota:
-                description: VirtualClusterQuotaConfig gom nhóm toàn bộ các giới hạn
+                description: ClusterLabQuotaConfig gom nhóm toàn bộ các giới hạn
                   tài nguyên
                 properties:
                   compute:
-                    description: VirtualClusterComputeQuota định nghĩa giới hạn tài
+                    description: ClusterLabComputeQuota định nghĩa giới hạn tài
                       nguyên tính toán
                     properties:
                       cpu:
-                        description: VirtualClusterResourceLimit định nghĩa cấu trúc
+                        description: ClusterLabResourceLimit định nghĩa cấu trúc
                           có chứa trường limit cho CPU/Memory
                         properties:
                           limit:
@@ -92,7 +92,7 @@ spec:
                         - limit
                         type: object
                       memory:
-                        description: VirtualClusterResourceLimit định nghĩa cấu trúc
+                        description: ClusterLabResourceLimit định nghĩa cấu trúc
                           có chứa trường limit cho CPU/Memory
                         properties:
                           limit:
@@ -109,7 +109,7 @@ spec:
                     - memory
                     type: object
                   objects:
-                    description: VirtualClusterObjectsQuota định nghĩa giới hạn số
+                    description: ClusterLabObjectsQuota định nghĩa giới hạn số
                       lượng tài nguyên K8s
                     properties:
                       podsLimit:
@@ -123,18 +123,24 @@ spec:
                     - servicesLimit
                     type: object
                   storage:
-                    description: |-
-                      VirtualClusterStorageQuota định nghĩa giới hạn dung lượng ephemeral storage (emptyDir) của toàn VirtualCluster
-                      Được map tới K8s ResourceQuota field: limits.ephemeral-storage
+                    description: ClusterLabStorageQuota định nghĩa giới hạn dung
+                      lượng lưu trữ
                     properties:
-                      limit:
+                      localLimit:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      networkLimit:
                         anyOf:
                         - type: integer
                         - type: string
                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                         x-kubernetes-int-or-string: true
                     required:
-                    - limit
+                    - localLimit
+                    - networkLimit
                     type: object
                 required:
                 - compute
@@ -143,7 +149,7 @@ spec:
                 type: object
               ttl:
                 description: 'TTL định nghĩa thời gian sống của cụm Lab, sau thời
-                  gian này toàn bộ cụm và VirtualInstance bên trong sẽ bị thu hồi
+                  gian này toàn bộ cụm và InstanceLab bên trong sẽ bị thu hồi
                   (vd: "4h", "120m")'
                 type: string
             required:
@@ -151,7 +157,7 @@ spec:
             - quota
             type: object
           status:
-            description: VirtualClusterStatus định nghĩa trạng thái quan sát được
+            description: ClusterLabStatus định nghĩa trạng thái quan sát được
               của cụm
             properties:
               conditions:
@@ -247,7 +253,7 @@ spec:
                 description: QuotaUsage thống kê real-time tài nguyên
                 properties:
                   compute:
-                    description: VirtualClusterComputeUsage thống kê CPU và RAM đã
+                    description: ClusterLabComputeUsage thống kê CPU và RAM đã
                       sử dụng
                     properties:
                       cpuUsed:
@@ -264,7 +270,7 @@ spec:
                         x-kubernetes-int-or-string: true
                     type: object
                   objects:
-                    description: VirtualClusterObjectsUsage thống kê số lượng Pod/Service
+                    description: ClusterLabObjectsUsage thống kê số lượng Pod/Service
                       đã tạo
                     properties:
                       podsUsed:
@@ -275,10 +281,16 @@ spec:
                         type: integer
                     type: object
                   storage:
-                    description: VirtualClusterStorageUsage thống kê ephemeral storage
-                      đã sử dụng trong VirtualCluster
+                    description: ClusterLabStorageUsage thống kê dung lượng lưu
+                      trữ đã sử dụng
                     properties:
-                      used:
+                      localUsed:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      networkUsed:
                         anyOf:
                         - type: integer
                         - type: string

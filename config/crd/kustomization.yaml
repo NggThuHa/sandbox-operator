@@ -3,8 +3,8 @@
 # It should be run by config/default
 resources:
 
-- bases/lab.devops.toiyeuptit.com_virtualclusters.yaml
-- bases/lab.devops.toiyeuptit.com_virtualinstances.yaml
+- bases/lab.devops.toiyeuptit.com_clusterlabs.yaml
+- bases/lab.devops.toiyeuptit.com_instancelabs.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

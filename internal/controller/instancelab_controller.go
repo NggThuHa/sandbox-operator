@@ -43,21 +43,21 @@ const (
 	SysboxRuntimeClass = "sysbox-runc"
 )
 
-// VirtualInstanceReconciler đóng vai trò là "Người vận hành máy ảo".
+// InstanceLabReconciler đóng vai trò là "Người vận hành máy ảo".
 // Lắp ráp Pod (Sysbox runtime), chuẩn bị ổ cứng (PVC), cấu hình dịch vụ mạng và tổng hợp danh sách URL bảo mật HTTPS.
-type VirtualInstanceReconciler struct {
+type InstanceLabReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
 
 // ============================================================================
-// KHAI BÁO RBAC MARKERS (Phân Quyền cho VirtualInstance Controller)
+// KHAI BÁO RBAC MARKERS (Phân Quyền cho InstanceLab Controller)
 // ============================================================================
 
-// +kubebuilder:rbac:groups=lab.devops.toiyeuptit.com,resources=virtualinstances,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=lab.devops.toiyeuptit.com,resources=virtualinstances/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=lab.devops.toiyeuptit.com,resources=virtualinstances/finalizers,verbs=update
-// +kubebuilder:rbac:groups=lab.devops.toiyeuptit.com,resources=virtualclusters,verbs=get;list;watch
+// +kubebuilder:rbac:groups=lab.devops.toiyeuptit.com,resources=instancelabs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=lab.devops.toiyeuptit.com,resources=instancelabs/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=lab.devops.toiyeuptit.com,resources=instancelabs/finalizers,verbs=update
+// +kubebuilder:rbac:groups=lab.devops.toiyeuptit.com,resources=clusterlabs,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=pods;services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
@@ -66,87 +66,87 @@ type VirtualInstanceReconciler struct {
 // VÒNG LẶP ĐIỀU KHIỂN TRUNG TÂM (Reconcile Loop)
 // ============================================================================
 
-func (r *VirtualInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *InstanceLabReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
-	log.Info("Starting reconciliation for VirtualInstance", "name", req.Name)
+	log.Info("Starting reconciliation for InstanceLab", "name", req.Name)
 
-	// 1. TRÍCH XUẤT ĐỐI TƯỢNG VIRTUALINSTANCE
-	virtualInstance := &labv1alpha1.VirtualInstance{}
-	if err := r.Get(ctx, req.NamespacedName, virtualInstance); err != nil {
+	// 1. TRÍCH XUẤT ĐỐI TƯỢNG INSTANCELAB
+	instanceLab := &labv1alpha1.InstanceLab{}
+	if err := r.Get(ctx, req.NamespacedName, instanceLab); err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info("VirtualInstance resource not found, ignoring because it must have been deleted")
+			log.Info("InstanceLab resource not found, ignoring because it must have been deleted")
 			return ctrl.Result{}, nil
 		}
-		log.Error(err, "Failed to fetch VirtualInstance")
+		log.Error(err, "Failed to fetch InstanceLab")
 		return ctrl.Result{}, err
 	}
 
 	// 2. QUY TẮC ƯU TIÊN FINALIZER (Finalizer-First Rule)
-	if virtualInstance.DeletionTimestamp == nil && !controllerutil.ContainsFinalizer(virtualInstance, utils.VirtualInstanceFinalizer) {
-		log.Info("Adding Finalizer to VirtualInstance for safe cross-namespace resource cleanup")
-		controllerutil.AddFinalizer(virtualInstance, utils.VirtualInstanceFinalizer)
-		if err := r.Update(ctx, virtualInstance); err != nil {
-			log.Error(err, "Failed to update VirtualInstance with Finalizer")
+	if instanceLab.DeletionTimestamp == nil && !controllerutil.ContainsFinalizer(instanceLab, utils.InstanceLabFinalizer) {
+		log.Info("Adding Finalizer to InstanceLab for safe cross-namespace resource cleanup")
+		controllerutil.AddFinalizer(instanceLab, utils.InstanceLabFinalizer)
+		if err := r.Update(ctx, instanceLab); err != nil {
+			log.Error(err, "Failed to update InstanceLab with Finalizer")
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
 	}
 
 	// 3. XỬ LÝ QUY TRÌNH TIÊU HUỶ VÀ GIẢI PHÓNG TÀI NGUYÊN (Cross-namespace Cleanup)
-	if virtualInstance.DeletionTimestamp != nil {
-		return r.reconcileFinalizer(ctx, virtualInstance)
+	if instanceLab.DeletionTimestamp != nil {
+		return r.reconcileFinalizer(ctx, instanceLab)
 	}
 
-	// 4. XÁC THỰC CỤM CHA VIRTUALCLUSTER VÀ THIẾT LẬП OWNER REFERENCE
-	virtualCluster, isReady, err := r.resolveParentVirtualCluster(ctx, virtualInstance)
+	// 4. XÁC THỰC CỤM CHA CLUSTERLAB VÀ THIẾT LẬП OWNER REFERENCE
+	clusterLab, isReady, err := r.resolveParentClusterLab(ctx, instanceLab)
 	if err != nil {
-		log.Error(err, "Error querying parent VirtualCluster", "virtualCluster", virtualInstance.Spec.VirtualClusterRef)
+		log.Error(err, "Error querying parent ClusterLab", "clusterLab", instanceLab.Spec.ClusterLabRef)
 		return ctrl.Result{}, err
 	}
 	if !isReady {
-		log.Info("Parent VirtualCluster is not running yet or awaiting initial reconciliation, requeuing", "virtualCluster", virtualInstance.Spec.VirtualClusterRef)
-		virtualInstance.Status.Phase = "Pending"
-		utils.SetCondition(&virtualInstance.Status.Conditions, "WaitingForCluster", metav1.ConditionFalse, "ParentNotReady", fmt.Sprintf("Waiting for parent VirtualCluster %s to enter Running phase", virtualInstance.Spec.VirtualClusterRef))
-		_ = r.Status().Update(ctx, virtualInstance)
+		log.Info("Parent ClusterLab is not running yet or awaiting initial reconciliation, requeuing", "clusterLab", instanceLab.Spec.ClusterLabRef)
+		instanceLab.Status.Phase = "Pending"
+		utils.SetCondition(&instanceLab.Status.Conditions, "WaitingForCluster", metav1.ConditionFalse, "ParentNotReady", fmt.Sprintf("Waiting for parent ClusterLab %s to enter Running phase", instanceLab.Spec.ClusterLabRef))
+		_ = r.Status().Update(ctx, instanceLab)
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 
-	targetNamespace := virtualCluster.Status.TargetNamespace
+	targetNamespace := clusterLab.Status.TargetNamespace
 	if targetNamespace == "" {
-		targetNamespace = utils.GenerateTargetNamespace(virtualCluster.Name)
+		targetNamespace = utils.GenerateTargetNamespace(clusterLab.Name)
 	}
 
 	// 5. KIẾN TẠO MÁY ẢO DOCKER-IN-DOCKER VỚI SYSBOX RUNTIME (Pod)
-	pod, err := r.reconcileSysboxPod(ctx, virtualInstance, targetNamespace)
+	pod, err := r.reconcileSysboxPod(ctx, instanceLab, targetNamespace)
 	if err != nil {
-		log.Error(err, "Failed to reconcile Sysbox Pod for VirtualInstance")
-		r.updateStatusFailed(ctx, virtualInstance, "PodError", err.Error())
+		log.Error(err, "Failed to reconcile Sysbox Pod for InstanceLab")
+		r.updateStatusFailed(ctx, instanceLab, "PodError", err.Error())
 		return ctrl.Result{}, err
 	}
 
 	// 6. KIẾN TẠO DỊCH VỤ GOM LƯU LƯỢNG MẠNG (ClusterIP Service)
-	svc, err := r.reconcileServices(ctx, virtualInstance, targetNamespace)
+	svc, err := r.reconcileServices(ctx, instanceLab, targetNamespace)
 	if err != nil {
-		log.Error(err, "Failed to reconcile Service for VirtualInstance")
-		r.updateStatusFailed(ctx, virtualInstance, "ServiceError", err.Error())
+		log.Error(err, "Failed to reconcile Service for InstanceLab")
+		r.updateStatusFailed(ctx, instanceLab, "ServiceError", err.Error())
 		return ctrl.Result{}, err
 	}
 
 	// 7. KIẾN TẠO CỔNG TRUY CẬP BẢO MẬT HTTPS (Ingress with TLS & Cert-Manager)
-	ingress, err := r.reconcileIngress(ctx, virtualInstance, virtualCluster, targetNamespace, svc)
+	ingress, err := r.reconcileIngress(ctx, instanceLab, clusterLab, targetNamespace, svc)
 	if err != nil {
-		log.Error(err, "Failed to reconcile Ingress for VirtualInstance")
-		r.updateStatusFailed(ctx, virtualInstance, "IngressError", err.Error())
+		log.Error(err, "Failed to reconcile Ingress for InstanceLab")
+		r.updateStatusFailed(ctx, instanceLab, "IngressError", err.Error())
 		return ctrl.Result{}, err
 	}
 
 	// 8. CẬP NHẬT TRẠNG THÁI GIAO DIỆN (UI Endpoints, Pod IP)
-	if err := r.updateVirtualInstanceStatus(ctx, virtualInstance, pod, svc, ingress); err != nil {
-		log.Error(err, "Failed to update VirtualInstance status")
+	if err := r.updateInstanceLabStatus(ctx, instanceLab, pod, svc, ingress); err != nil {
+		log.Error(err, "Failed to update InstanceLab status")
 		return ctrl.Result{}, err
 	}
 
-	log.Info("Successfully reconciled VirtualInstance", "name", virtualInstance.Name, "phase", virtualInstance.Status.Phase, "podIP", virtualInstance.Status.PodIP)
+	log.Info("Successfully reconciled InstanceLab", "name", instanceLab.Name, "phase", instanceLab.Status.Phase, "podIP", instanceLab.Status.PodIP)
 	return ctrl.Result{}, nil
 }
 
@@ -154,9 +154,9 @@ func (r *VirtualInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 // HỆ CÁC HÀM XỬ LÝ QUY TRÌNH KIẾN TẠO VÀ THANH MỘ THAI SẢN
 // ============================================================================
 
-func (r *VirtualInstanceReconciler) resolveParentVirtualCluster(ctx context.Context, virtualInstance *labv1alpha1.VirtualInstance) (*labv1alpha1.VirtualCluster, bool, error) {
-	virtualCluster := &labv1alpha1.VirtualCluster{}
-	err := r.Get(ctx, types.NamespacedName{Name: virtualInstance.Spec.VirtualClusterRef, Namespace: virtualInstance.Namespace}, virtualCluster)
+func (r *InstanceLabReconciler) resolveParentClusterLab(ctx context.Context, instanceLab *labv1alpha1.InstanceLab) (*labv1alpha1.ClusterLab, bool, error) {
+	clusterLab := &labv1alpha1.ClusterLab{}
+	err := r.Get(ctx, types.NamespacedName{Name: instanceLab.Spec.ClusterLabRef, Namespace: instanceLab.Namespace}, clusterLab)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, false, nil
@@ -164,50 +164,50 @@ func (r *VirtualInstanceReconciler) resolveParentVirtualCluster(ctx context.Cont
 		return nil, false, err
 	}
 
-	if err := controllerutil.SetControllerReference(virtualCluster, virtualInstance, r.Scheme); err == nil {
-		_ = r.Update(ctx, virtualInstance)
+	if err := controllerutil.SetControllerReference(clusterLab, instanceLab, r.Scheme); err == nil {
+		_ = r.Update(ctx, instanceLab)
 	}
 
-	isReady := strings.EqualFold(virtualCluster.Status.Phase, "Running") || strings.EqualFold(virtualCluster.Status.Phase, "Ready")
-	return virtualCluster, isReady, nil
+	isReady := strings.EqualFold(clusterLab.Status.Phase, "Running") || strings.EqualFold(clusterLab.Status.Phase, "Ready")
+	return clusterLab, isReady, nil
 }
 
-func (r *VirtualInstanceReconciler) reconcileFinalizer(ctx context.Context, virtualInstance *labv1alpha1.VirtualInstance) (ctrl.Result, error) {
+func (r *InstanceLabReconciler) reconcileFinalizer(ctx context.Context, instanceLab *labv1alpha1.InstanceLab) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
-	if !controllerutil.ContainsFinalizer(virtualInstance, utils.VirtualInstanceFinalizer) {
+	if !controllerutil.ContainsFinalizer(instanceLab, utils.InstanceLabFinalizer) {
 		return ctrl.Result{}, nil
 	}
 
-	log.Info("Executing Finalizer cross-namespace cleanup for VirtualInstance", "instance", virtualInstance.Name)
+	log.Info("Executing Finalizer cross-namespace cleanup for InstanceLab", "instance", instanceLab.Name)
 
-	virtualCluster := &labv1alpha1.VirtualCluster{}
+	clusterLab := &labv1alpha1.ClusterLab{}
 	targetNs := ""
-	if err := r.Get(ctx, types.NamespacedName{Name: virtualInstance.Spec.VirtualClusterRef, Namespace: virtualInstance.Namespace}, virtualCluster); err == nil {
-		targetNs = virtualCluster.Status.TargetNamespace
+	if err := r.Get(ctx, types.NamespacedName{Name: instanceLab.Spec.ClusterLabRef, Namespace: instanceLab.Namespace}, clusterLab); err == nil {
+		targetNs = clusterLab.Status.TargetNamespace
 	}
 	if targetNs == "" {
-		targetNs = utils.GenerateTargetNamespace(virtualInstance.Spec.VirtualClusterRef)
+		targetNs = utils.GenerateTargetNamespace(instanceLab.Spec.ClusterLabRef)
 	}
 
-	matchLabels := client.MatchingLabels{utils.LabelVirtualInstance: virtualInstance.Name}
+	matchLabels := client.MatchingLabels{utils.LabelInstanceLab: instanceLab.Name}
 
 	_ = r.DeleteAllOf(ctx, &networkingv1.Ingress{}, client.InNamespace(targetNs), matchLabels)
 	_ = r.DeleteAllOf(ctx, &corev1.Service{}, client.InNamespace(targetNs), matchLabels)
 	_ = r.DeleteAllOf(ctx, &corev1.Pod{}, client.InNamespace(targetNs), matchLabels)
 	// Không cần xóa PVC vì không còn dùng PVC
 
-	log.Info("Successfully cleaned up all workloads in target namespace. Removing Finalizer", "name", virtualInstance.Name)
-	controllerutil.RemoveFinalizer(virtualInstance, utils.VirtualInstanceFinalizer)
-	if err := r.Update(ctx, virtualInstance); err != nil {
-		log.Error(err, "Failed to remove Finalizer from VirtualInstance")
+	log.Info("Successfully cleaned up all workloads in target namespace. Removing Finalizer", "name", instanceLab.Name)
+	controllerutil.RemoveFinalizer(instanceLab, utils.InstanceLabFinalizer)
+	if err := r.Update(ctx, instanceLab); err != nil {
+		log.Error(err, "Failed to remove Finalizer from InstanceLab")
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
 }
 
-func (r *VirtualInstanceReconciler) reconcileSysboxPod(ctx context.Context, virtualInstance *labv1alpha1.VirtualInstance, targetNs string) (*corev1.Pod, error) {
+func (r *InstanceLabReconciler) reconcileSysboxPod(ctx context.Context, instanceLab *labv1alpha1.InstanceLab, targetNs string) (*corev1.Pod, error) {
 	log := logf.FromContext(ctx)
-	podName := utils.SanitizeName(fmt.Sprintf("%s-sysbox", virtualInstance.Name), 63)
+	podName := utils.SanitizeName(fmt.Sprintf("%s-sysbox", instanceLab.Name), 63)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -220,8 +220,8 @@ func (r *VirtualInstanceReconciler) reconcileSysboxPod(ctx context.Context, virt
 			pod.Labels = make(map[string]string)
 		}
 		pod.Labels[utils.LabelManagedBy] = utils.LabelValueManagedBy
-		pod.Labels[utils.LabelVirtualCluster] = virtualInstance.Spec.VirtualClusterRef
-		pod.Labels[utils.LabelVirtualInstance] = virtualInstance.Name
+		pod.Labels[utils.LabelClusterLab] = instanceLab.Spec.ClusterLabRef
+		pod.Labels[utils.LabelInstanceLab] = instanceLab.Name
 		pod.Labels["app"] = podName
 
 		enableServiceLinks := false
@@ -238,11 +238,11 @@ func (r *VirtualInstanceReconciler) reconcileSysboxPod(ctx context.Context, virt
 		runtimeClass := SysboxRuntimeClass
 		pod.Spec.RuntimeClassName = &runtimeClass
 		pod.Spec.RestartPolicy = corev1.RestartPolicyNever
-		if virtualInstance.Spec.Hostname != "" {
-			pod.Spec.Hostname = virtualInstance.Spec.Hostname
+		if instanceLab.Spec.Hostname != "" {
+			pod.Spec.Hostname = instanceLab.Spec.Hostname
 		}
-		if len(virtualInstance.Spec.ImagePullSecrets) > 0 {
-			pod.Spec.ImagePullSecrets = virtualInstance.Spec.ImagePullSecrets
+		if len(instanceLab.Spec.ImagePullSecrets) > 0 {
+			pod.Spec.ImagePullSecrets = instanceLab.Spec.ImagePullSecrets
 		}
 
 		var volumes []corev1.Volume
@@ -278,7 +278,7 @@ func (r *VirtualInstanceReconciler) reconcileSysboxPod(ctx context.Context, virt
 		}
 
 		var containerPorts []corev1.ContainerPort
-		for _, p := range virtualInstance.Spec.Ports {
+		for _, p := range instanceLab.Spec.Ports {
 			containerPorts = append(containerPorts, corev1.ContainerPort{
 				Name:          utils.SanitizeName(p.Name, 15),
 				ContainerPort: p.TargetPort,
@@ -286,7 +286,7 @@ func (r *VirtualInstanceReconciler) reconcileSysboxPod(ctx context.Context, virt
 			})
 		}
 
-		image := virtualInstance.Spec.Image
+		image := instanceLab.Spec.Image
 		if image == "" {
 			image = "ubuntu:24.04"
 		}
@@ -304,20 +304,20 @@ func (r *VirtualInstanceReconciler) reconcileSysboxPod(ctx context.Context, virt
 			Requests: corev1.ResourceList{},
 			Limits:   corev1.ResourceList{},
 		}
-		if !virtualInstance.Spec.Resources.CPU.Request.IsZero() {
-			resList.Requests[corev1.ResourceCPU] = virtualInstance.Spec.Resources.CPU.Request
+		if !instanceLab.Spec.Resources.CPU.Request.IsZero() {
+			resList.Requests[corev1.ResourceCPU] = instanceLab.Spec.Resources.CPU.Request
 		}
-		if !virtualInstance.Spec.Resources.CPU.Limit.IsZero() {
-			resList.Limits[corev1.ResourceCPU] = virtualInstance.Spec.Resources.CPU.Limit
+		if !instanceLab.Spec.Resources.CPU.Limit.IsZero() {
+			resList.Limits[corev1.ResourceCPU] = instanceLab.Spec.Resources.CPU.Limit
 		}
-		if !virtualInstance.Spec.Resources.Memory.Request.IsZero() {
-			resList.Requests[corev1.ResourceMemory] = virtualInstance.Spec.Resources.Memory.Request
+		if !instanceLab.Spec.Resources.Memory.Request.IsZero() {
+			resList.Requests[corev1.ResourceMemory] = instanceLab.Spec.Resources.Memory.Request
 		}
-		if !virtualInstance.Spec.Resources.Memory.Limit.IsZero() {
-			resList.Limits[corev1.ResourceMemory] = virtualInstance.Spec.Resources.Memory.Limit
+		if !instanceLab.Spec.Resources.Memory.Limit.IsZero() {
+			resList.Limits[corev1.ResourceMemory] = instanceLab.Spec.Resources.Memory.Limit
 		}
-		if !virtualInstance.Spec.Resources.Storage.Limit.IsZero() {
-			resList.Limits[corev1.ResourceEphemeralStorage] = virtualInstance.Spec.Resources.Storage.Limit
+		if !instanceLab.Spec.Resources.Storage.Limit.IsZero() {
+			resList.Limits[corev1.ResourceEphemeralStorage] = instanceLab.Spec.Resources.Storage.Limit
 		}
 		if len(resList.Requests) > 0 || len(resList.Limits) > 0 {
 			container.Resources = resList
@@ -335,14 +335,14 @@ func (r *VirtualInstanceReconciler) reconcileSysboxPod(ctx context.Context, virt
 	return pod, nil
 }
 
-func (r *VirtualInstanceReconciler) reconcileServices(ctx context.Context, virtualInstance *labv1alpha1.VirtualInstance, targetNs string) (*corev1.Service, error) {
+func (r *InstanceLabReconciler) reconcileServices(ctx context.Context, instanceLab *labv1alpha1.InstanceLab, targetNs string) (*corev1.Service, error) {
 	log := logf.FromContext(ctx)
-	if len(virtualInstance.Spec.Ports) == 0 {
+	if len(instanceLab.Spec.Ports) == 0 {
 		return nil, nil
 	}
 
-	svcName := utils.SanitizeName(fmt.Sprintf("%s-svc", virtualInstance.Name), 63)
-	podName := utils.SanitizeName(fmt.Sprintf("%s-sysbox", virtualInstance.Name), 63)
+	svcName := utils.SanitizeName(fmt.Sprintf("%s-svc", instanceLab.Name), 63)
+	podName := utils.SanitizeName(fmt.Sprintf("%s-sysbox", instanceLab.Name), 63)
 
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -356,14 +356,14 @@ func (r *VirtualInstanceReconciler) reconcileServices(ctx context.Context, virtu
 			svc.Labels = make(map[string]string)
 		}
 		svc.Labels[utils.LabelManagedBy] = utils.LabelValueManagedBy
-		svc.Labels[utils.LabelVirtualCluster] = virtualInstance.Spec.VirtualClusterRef
-		svc.Labels[utils.LabelVirtualInstance] = virtualInstance.Name
+		svc.Labels[utils.LabelClusterLab] = instanceLab.Spec.ClusterLabRef
+		svc.Labels[utils.LabelInstanceLab] = instanceLab.Name
 
 		svc.Spec.Selector = map[string]string{"app": podName}
 		svc.Spec.Type = corev1.ServiceTypeClusterIP
 
 		var svcPorts []corev1.ServicePort
-		for _, p := range virtualInstance.Spec.Ports {
+		for _, p := range instanceLab.Spec.Ports {
 			svcPorts = append(svcPorts, corev1.ServicePort{
 				Name:       utils.SanitizeName(p.Name, 15),
 				Port:       p.Port,
@@ -382,14 +382,14 @@ func (r *VirtualInstanceReconciler) reconcileServices(ctx context.Context, virtu
 	return svc, nil
 }
 
-func (r *VirtualInstanceReconciler) reconcileIngress(ctx context.Context, virtualInstance *labv1alpha1.VirtualInstance, virtualCluster *labv1alpha1.VirtualCluster, targetNs string, svc *corev1.Service) (*networkingv1.Ingress, error) {
+func (r *InstanceLabReconciler) reconcileIngress(ctx context.Context, instanceLab *labv1alpha1.InstanceLab, clusterLab *labv1alpha1.ClusterLab, targetNs string, svc *corev1.Service) (*networkingv1.Ingress, error) {
 	log := logf.FromContext(ctx)
 	if svc == nil {
 		return nil, nil
 	}
 
-	var exposePorts []labv1alpha1.VirtualInstancePort
-	for _, p := range virtualInstance.Spec.Ports {
+	var exposePorts []labv1alpha1.InstanceLabPort
+	for _, p := range instanceLab.Spec.Ports {
 		if p.Expose {
 			exposePorts = append(exposePorts, p)
 		}
@@ -398,7 +398,7 @@ func (r *VirtualInstanceReconciler) reconcileIngress(ctx context.Context, virtua
 		return nil, nil
 	}
 
-	ingName := utils.SanitizeName(fmt.Sprintf("%s-ingress", virtualInstance.Name), 63)
+	ingName := utils.SanitizeName(fmt.Sprintf("%s-ingress", instanceLab.Name), 63)
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ingName,
@@ -411,8 +411,8 @@ func (r *VirtualInstanceReconciler) reconcileIngress(ctx context.Context, virtua
 			ingress.Labels = make(map[string]string)
 		}
 		ingress.Labels[utils.LabelManagedBy] = utils.LabelValueManagedBy
-		ingress.Labels[utils.LabelVirtualCluster] = virtualInstance.Spec.VirtualClusterRef
-		ingress.Labels[utils.LabelVirtualInstance] = virtualInstance.Name
+		ingress.Labels[utils.LabelClusterLab] = instanceLab.Spec.ClusterLabRef
+		ingress.Labels[utils.LabelInstanceLab] = instanceLab.Name
 
 		if ingress.Annotations == nil {
 			ingress.Annotations = make(map[string]string)
@@ -426,9 +426,9 @@ func (r *VirtualInstanceReconciler) reconcileIngress(ctx context.Context, virtua
 		ingClass := utils.GetIngressClassName()
 		ingress.Spec.IngressClassName = &ingClass
 
-		host := utils.GenerateIngressHost(virtualInstance.Name, virtualCluster.Name, "")
+		host := utils.GenerateIngressHost(instanceLab.Name, clusterLab.Name, "")
 
-		secretName := utils.SanitizeName(fmt.Sprintf("%s-tls-secret", virtualInstance.Name), 63)
+		secretName := utils.SanitizeName(fmt.Sprintf("%s-tls-secret", instanceLab.Name), 63)
 		ingress.Spec.TLS = []networkingv1.IngressTLS{
 			{
 				Hosts:      []string{host},
@@ -471,7 +471,7 @@ func (r *VirtualInstanceReconciler) reconcileIngress(ctx context.Context, virtua
 	if err != nil {
 		return nil, err
 	}
-	log.Info("Reconciled Ingress successfully with HTTPS/TLS Enabled", "ingressName", ingName, "host", utils.GenerateIngressHost(virtualInstance.Name, virtualCluster.Name, ""))
+	log.Info("Reconciled Ingress successfully with HTTPS/TLS Enabled", "ingressName", ingName, "host", utils.GenerateIngressHost(instanceLab.Name, clusterLab.Name, ""))
 	return ingress, nil
 }
 
@@ -479,32 +479,32 @@ func (r *VirtualInstanceReconciler) reconcileIngress(ctx context.Context, virtua
 // HÀM CẬP NHẬT TRẠNG THÁI (Status Updating)
 // ============================================================================
 
-func (r *VirtualInstanceReconciler) updateVirtualInstanceStatus(ctx context.Context, virtualInstance *labv1alpha1.VirtualInstance, pod *corev1.Pod, svc *corev1.Service, ing *networkingv1.Ingress) error {
+func (r *InstanceLabReconciler) updateInstanceLabStatus(ctx context.Context, instanceLab *labv1alpha1.InstanceLab, pod *corev1.Pod, svc *corev1.Service, ing *networkingv1.Ingress) error {
 	if pod != nil {
-		virtualInstance.Status.PodName = pod.Name
-		virtualInstance.Status.PodIP = pod.Status.PodIP
+		instanceLab.Status.PodName = pod.Name
+		instanceLab.Status.PodIP = pod.Status.PodIP
 
 		switch pod.Status.Phase {
 		case corev1.PodRunning:
-			virtualInstance.Status.Phase = PhaseRunning
-			utils.SetCondition(&virtualInstance.Status.Conditions, "PodReady", metav1.ConditionTrue, "ContainerRunning", "Sysbox VM instance is running and responsive")
+			instanceLab.Status.Phase = PhaseRunning
+			utils.SetCondition(&instanceLab.Status.Conditions, "PodReady", metav1.ConditionTrue, "ContainerRunning", "Sysbox VM instance is running and responsive")
 		case corev1.PodPending:
-			virtualInstance.Status.Phase = PhaseCreating
-			utils.SetCondition(&virtualInstance.Status.Conditions, "PodReady", metav1.ConditionFalse, "PodPending", "Waiting for K8s scheduler and volume mounting")
+			instanceLab.Status.Phase = PhaseCreating
+			utils.SetCondition(&instanceLab.Status.Conditions, "PodReady", metav1.ConditionFalse, "PodPending", "Waiting for K8s scheduler and volume mounting")
 		case corev1.PodFailed:
-			virtualInstance.Status.Phase = PhaseFailed
-			utils.SetCondition(&virtualInstance.Status.Conditions, "PodReady", metav1.ConditionFalse, "PodFailed", "Sysbox VM Pod execution failed")
+			instanceLab.Status.Phase = PhaseFailed
+			utils.SetCondition(&instanceLab.Status.Conditions, "PodReady", metav1.ConditionFalse, "PodFailed", "Sysbox VM Pod execution failed")
 		default:
-			virtualInstance.Status.Phase = PhaseCreating
+			instanceLab.Status.Phase = PhaseCreating
 		}
 	} else {
-		virtualInstance.Status.Phase = PhaseCreating
+		instanceLab.Status.Phase = PhaseCreating
 	}
 
-	endpoints := make([]labv1alpha1.VirtualInstanceAccessEndpoint, 0, len(virtualInstance.Spec.Ports))
-	for _, p := range virtualInstance.Spec.Ports {
+	endpoints := make([]labv1alpha1.InstanceLabAccessEndpoint, 0, len(instanceLab.Spec.Ports))
+	for _, p := range instanceLab.Spec.Ports {
 		internalAddr := fmt.Sprintf("http://%s.%s.svc.cluster.local:%d", svc.Name, pod.Namespace, p.Port)
-		ep := labv1alpha1.VirtualInstanceAccessEndpoint{
+		ep := labv1alpha1.InstanceLabAccessEndpoint{
 			Name:            p.Name,
 			Protocol:        "TCP",
 			InternalAddress: internalAddr,
@@ -515,30 +515,30 @@ func (r *VirtualInstanceReconciler) updateVirtualInstanceStatus(ctx context.Cont
 		}
 		endpoints = append(endpoints, ep)
 	}
-	virtualInstance.Status.AccessEndpoints = endpoints
+	instanceLab.Status.AccessEndpoints = endpoints
 
-	if strings.EqualFold(virtualInstance.Status.Phase, "Running") {
-		utils.SetCondition(&virtualInstance.Status.Conditions, "Ready", metav1.ConditionTrue, "InstanceReady", "VirtualInstance is ready for student connectivity")
+	if strings.EqualFold(instanceLab.Status.Phase, "Running") {
+		utils.SetCondition(&instanceLab.Status.Conditions, "Ready", metav1.ConditionTrue, "InstanceReady", "InstanceLab is ready for student connectivity")
 	} else {
-		utils.SetCondition(&virtualInstance.Status.Conditions, "Ready", metav1.ConditionFalse, "InstanceProvisioning", "VirtualInstance is currently being provisioned")
+		utils.SetCondition(&instanceLab.Status.Conditions, "Ready", metav1.ConditionFalse, "InstanceProvisioning", "InstanceLab is currently being provisioned")
 	}
 
-	return r.Status().Update(ctx, virtualInstance)
+	return r.Status().Update(ctx, instanceLab)
 }
 
-func (r *VirtualInstanceReconciler) updateStatusFailed(ctx context.Context, virtualInstance *labv1alpha1.VirtualInstance, reason, message string) {
-	virtualInstance.Status.Phase = PhaseFailed
-	utils.SetCondition(&virtualInstance.Status.Conditions, "Ready", metav1.ConditionFalse, reason, message)
-	_ = r.Status().Update(ctx, virtualInstance)
+func (r *InstanceLabReconciler) updateStatusFailed(ctx context.Context, instanceLab *labv1alpha1.InstanceLab, reason, message string) {
+	instanceLab.Status.Phase = PhaseFailed
+	utils.SetCondition(&instanceLab.Status.Conditions, "Ready", metav1.ConditionFalse, reason, message)
+	_ = r.Status().Update(ctx, instanceLab)
 }
 
 // ============================================================================
 // GIÁM SÁT THAO TÁC NGƯỜI DÙNG & SELF-HEALING (SetupWithManager)
 // ============================================================================
 
-func (r *VirtualInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *InstanceLabReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&labv1alpha1.VirtualInstance{}).
-		Named("virtualinstance").
+		For(&labv1alpha1.InstanceLab{}).
+		Named("instancelab").
 		Complete(r)
 }

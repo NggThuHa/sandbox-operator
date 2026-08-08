@@ -15,18 +15,18 @@ import (
 // ============================================================================
 
 const (
-	// VirtualClusterFinalizer là thẻ cẩu bảo vệ VirtualCluster khỏi việc bị bốc hơi trực tiếp khỏi Database
+	// ClusterLabFinalizer là thẻ cẩu bảo vệ ClusterLab khỏi việc bị bốc hơi trực tiếp khỏi Database
 	// Đảm bảo Reconciler có thời gian tiêu hủy hạ tầng Namespace và workload bên trong
-	VirtualClusterFinalizer = "lab.devops.toiyeuptit.com/virtualcluster-finalizer"
+	ClusterLabFinalizer = "lab.devops.toiyeuptit.com/clusterlab-finalizer"
 
-	// VirtualInstanceFinalizer bảo vệ VirtualInstance trong các kịch bản cần dọn dẹp đặc thù
-	VirtualInstanceFinalizer = "lab.devops.toiyeuptit.com/virtualinstance-finalizer"
+	// InstanceLabFinalizer bảo vệ InstanceLab trong các kịch bản cần dọn dẹp đặc thù
+	InstanceLabFinalizer = "lab.devops.toiyeuptit.com/instancelab-finalizer"
 
 	// Các nhãn tiêu chuẩn của K8s để định danh đối tượng được sinh ra từ Operator này
-	LabelManagedBy       = "app.kubernetes.io/managed-by"
-	LabelValueManagedBy  = "typ-lab-operator"
-	LabelVirtualCluster  = "lab.devops.toiyeuptit.com/virtualcluster"
-	LabelVirtualInstance = "lab.devops.toiyeuptit.com/virtualinstance"
+	LabelManagedBy      = "app.kubernetes.io/managed-by"
+	LabelValueManagedBy = "typ-lab-operator"
+	LabelClusterLab     = "lab.devops.toiyeuptit.com/clusterlab"
+	LabelInstanceLab    = "lab.devops.toiyeuptit.com/instancelab"
 
 	// DefaultDomain là tên miền mặc định nếu người quản trị không truyền domain khác cho Ingress
 	DefaultDomain = "lab.toiyeuptit.com"
@@ -56,20 +56,20 @@ func SanitizeName(name string, maxLen int) string {
 	return fmt.Sprintf("%s-%s", prefix, hashStr)
 }
 
-// GenerateTargetNamespace sinh tên Namespace thực tế cho một VirtualCluster.
+// GenerateTargetNamespace sinh tên Namespace thực tế cho một ClusterLab.
 // Đảm bảo không quá 63 ký tự chuẩn RFC 1123.
-func GenerateTargetNamespace(virtualClusterName string) string {
-	rawName := fmt.Sprintf("lab-%s", virtualClusterName)
+func GenerateTargetNamespace(clusterLabName string) string {
+	rawName := fmt.Sprintf("lab-%s", clusterLabName)
 	return SanitizeName(rawName, 63)
 }
 
 // GenerateIngressHost sinh tên miền truy cập mượt mà cho các ứng dụng thực tập của sinh viên.
-func GenerateIngressHost(virtualInstanceName, virtualClusterName string, domain string) string {
+func GenerateIngressHost(instanceLabName, clusterLabName string, domain string) string {
 	if domain == "" {
 		domain = DefaultDomain
 	}
 
-	subdomainRaw := fmt.Sprintf("%s-%s", virtualInstanceName, virtualClusterName)
+	subdomainRaw := fmt.Sprintf("%s-%s", instanceLabName, clusterLabName)
 	subdomain := SanitizeName(strings.ToLower(subdomainRaw), 63)
 
 	return fmt.Sprintf("%s.%s", subdomain, domain)

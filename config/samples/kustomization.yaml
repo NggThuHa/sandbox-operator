@@ -1,5 +1,5 @@
 ## Append samples of your project ##
 resources:
-- lab_v1alpha1_virtualcluster.yaml
-- lab_v1alpha1_virtualinstance.yaml
+- lab_v1alpha1_clusterlab.yaml
+- lab_v1alpha1_instancelab.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

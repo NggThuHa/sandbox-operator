@@ -7,17 +7,17 @@ metadata:
   labels:
     app.kubernetes.io/name: kubebuilder
     app.kubernetes.io/managed-by: kustomize
-  name: virtualcluster-admin-role
+  name: clusterlab-admin-role
 rules:
 - apiGroups:
   - lab.devops.toiyeuptit.com
   resources:
-  - virtualclusters
+  - clusterlabs
   verbs:
   - '*'
 - apiGroups:
   - lab.devops.toiyeuptit.com
   resources:
-  - virtualclusters/status
+  - clusterlabs/status
   verbs:
   - get

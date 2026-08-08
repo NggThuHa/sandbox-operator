@@ -27,41 +27,41 @@ import (
 // 1. SPEC STRUCTS (Trạng thái mong muốn từ người dùng)
 // ============================================================================
 
-// VirtualInstanceResourceLimit định nghĩa CPU/Memory request và limit
-type VirtualInstanceResourceLimit struct {
+// InstanceLabResourceLimit định nghĩa CPU/Memory request và limit
+type InstanceLabResourceLimit struct {
 	Request resource.Quantity `json:"request,omitempty"`
 	Limit   resource.Quantity `json:"limit,omitempty"`
 }
 
-// VirtualInstanceStorageLimit định nghĩa giới hạn disk của container.
+// InstanceLabStorageLimit định nghĩa giới hạn disk của container.
 // Chỉ có Limit — không có Request vì ephemeral disk không cần scheduler reservation.
 // Map sang Pod resources.limits.ephemeral-storage → kubelet evict pod nếu vượt quá.
-type VirtualInstanceStorageLimit struct {
+type InstanceLabStorageLimit struct {
 	Limit resource.Quantity `json:"limit,omitempty"`
 }
 
-// VirtualInstanceResources gom nhóm tài nguyên tính toán của VirtualInstance
-type VirtualInstanceResources struct {
-	CPU    VirtualInstanceResourceLimit `json:"cpu,omitempty"`
-	Memory VirtualInstanceResourceLimit `json:"memory,omitempty"`
+// InstanceLabResources gom nhóm tài nguyên tính toán của InstanceLab
+type InstanceLabResources struct {
+	CPU    InstanceLabResourceLimit `json:"cpu,omitempty"`
+	Memory InstanceLabResourceLimit `json:"memory,omitempty"`
 	// Storage giới hạn tổng disk container (writable layer + logs + /var/lib/docker).
 	// Disk của container hoàn toàn ephemeral — xóa Pod là mất data.
 	// +optional
-	Storage VirtualInstanceStorageLimit `json:"storage,omitempty"`
+	Storage InstanceLabStorageLimit `json:"storage,omitempty"`
 }
 
-// VirtualInstancePort định nghĩa các cổng mạng cần mở
-type VirtualInstancePort struct {
+// InstanceLabPort định nghĩa các cổng mạng cần mở
+type InstanceLabPort struct {
 	Name       string `json:"name"`
 	Port       int32  `json:"port"`
 	TargetPort int32  `json:"targetPort"`
 	Expose     bool   `json:"expose"` // Nếu true -> Operator tự động tạo Ingress HTTPS
 }
 
-// VirtualInstanceSpec định nghĩa cấu hình của một máy ảo Sysbox
-type VirtualInstanceSpec struct {
-	// VirtualClusterRef là tên VirtualCluster cha — Operator sẽ tạo Pod trong namespace của cụm đó
-	VirtualClusterRef string `json:"virtualClusterRef"`
+// InstanceLabSpec định nghĩa cấu hình của một máy ảo Sysbox
+type InstanceLabSpec struct {
+	// ClusterLabRef là tên ClusterLab cha — Operator sẽ tạo Pod trong namespace của cụm đó
+	ClusterLabRef string `json:"clusterLabRef"`
 
 	// Image của container (mặc định: ubuntu:24.04)
 	// +optional
@@ -77,27 +77,27 @@ type VirtualInstanceSpec struct {
 
 	// Resources định nghĩa giới hạn CPU, Memory và Ephemeral Storage
 	// +optional
-	Resources VirtualInstanceResources `json:"resources,omitempty"`
+	Resources InstanceLabResources `json:"resources,omitempty"`
 
 	// Ports khai báo các cổng mạng cần expose
 	// +optional
-	Ports []VirtualInstancePort `json:"ports,omitempty"`
+	Ports []InstanceLabPort `json:"ports,omitempty"`
 }
 
 // ============================================================================
 // 2. STATUS STRUCTS (Trạng thái thực tế trả về cho UI)
 // ============================================================================
 
-// VirtualInstanceAccessEndpoint chứa thông tin URL để sinh viên bấm vào truy cập ngay
-type VirtualInstanceAccessEndpoint struct {
+// InstanceLabAccessEndpoint chứa thông tin URL để sinh viên bấm vào truy cập ngay
+type InstanceLabAccessEndpoint struct {
 	Name            string `json:"name"`
 	Protocol        string `json:"protocol"`
 	URL             string `json:"url,omitempty"`             // URL external qua Ingress (nếu Expose=true)
-	InternalAddress string `json:"internalAddress,omitempty"` // Địa chỉ gọi nội bộ trong VirtualCluster
+	InternalAddress string `json:"internalAddress,omitempty"` // Địa chỉ gọi nội bộ trong ClusterLab
 }
 
-// VirtualInstanceStatus định nghĩa trạng thái quan sát được của VirtualInstance
-type VirtualInstanceStatus struct {
+// InstanceLabStatus định nghĩa trạng thái quan sát được của InstanceLab
+type InstanceLabStatus struct {
 	// Phase thể hiện trạng thái máy ảo
 	// +kubebuilder:validation:Enum=Pending;Creating;Running;Stopped;Failed
 	Phase string `json:"phase,omitempty"`
@@ -107,7 +107,7 @@ type VirtualInstanceStatus struct {
 	PodIP   string `json:"podIP,omitempty"`
 
 	// AccessEndpoints là danh sách link/endpoint cho UI hiển thị nút bấm kết nối
-	AccessEndpoints []VirtualInstanceAccessEndpoint `json:"accessEndpoints,omitempty"`
+	AccessEndpoints []InstanceLabAccessEndpoint `json:"accessEndpoints,omitempty"`
 
 	// Conditions dùng chuẩn metav1.Condition của K8s để báo cáo trạng thái chi tiết
 	// +patchMergeKey=type
@@ -123,32 +123,32 @@ type VirtualInstanceStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase",description="The phase of the VirtualInstance"
-// +kubebuilder:printcolumn:name="VirtualCluster",type="string",JSONPath=".spec.virtualClusterRef",description="The VirtualCluster this instance belongs to"
+// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase",description="The phase of the InstanceLab"
+// +kubebuilder:printcolumn:name="ClusterLab",type="string",JSONPath=".spec.clusterLabRef",description="The ClusterLab this instance belongs to"
 // +kubebuilder:printcolumn:name="Pod IP",type="string",JSONPath=".status.podIP",description="The internal IP of the pod"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
-// VirtualInstance is the Schema for the virtualinstances API
-type VirtualInstance struct {
+// InstanceLab is the Schema for the instancelabs API
+type InstanceLab struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   VirtualInstanceSpec   `json:"spec,omitempty"`
-	Status VirtualInstanceStatus `json:"status,omitempty"`
+	Spec   InstanceLabSpec   `json:"spec,omitempty"`
+	Status InstanceLabStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// VirtualInstanceList contains a list of VirtualInstance
-type VirtualInstanceList struct {
+// InstanceLabList contains a list of InstanceLab
+type InstanceLabList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []VirtualInstance `json:"items"`
+	Items           []InstanceLab `json:"items"`
 }
 
 func init() {
 	SchemeBuilder.Register(func(s *runtime.Scheme) error {
-		s.AddKnownTypes(SchemeGroupVersion, &VirtualInstance{}, &VirtualInstanceList{})
+		s.AddKnownTypes(SchemeGroupVersion, &InstanceLab{}, &InstanceLabList{})
 		return nil
 	})
 }

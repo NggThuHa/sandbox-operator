@@ -30,10 +30,10 @@ import (
 	labv1alpha1 "github.com/ngtukien/sandbox-operator/api/v1alpha1"
 )
 
-var _ = Describe("VirtualCluster Controller", func() {
+var _ = Describe("ClusterLab Controller", func() {
 	Context("When reconciling a resource", func() {
 		const (
-			resourceName      = "test-virtualcluster-resource"
+			resourceName      = "test-clusterlab-resource"
 			resourceNamespace = "default"
 		)
 
@@ -43,30 +43,30 @@ var _ = Describe("VirtualCluster Controller", func() {
 			Name:      resourceName,
 			Namespace: resourceNamespace,
 		}
-		virtualCluster := &labv1alpha1.VirtualCluster{}
+		clusterLab := &labv1alpha1.ClusterLab{}
 
 		BeforeEach(func() {
-			By("creating the custom resource for the Kind VirtualCluster with valid Spec")
-			err := k8sClient.Get(ctx, typeNamespacedName, virtualCluster)
+			By("creating the custom resource for the Kind ClusterLab with valid Spec")
+			err := k8sClient.Get(ctx, typeNamespacedName, clusterLab)
 			if err != nil && errors.IsNotFound(err) {
-				resourceObj := &labv1alpha1.VirtualCluster{
+				resourceObj := &labv1alpha1.ClusterLab{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
 						Namespace: resourceNamespace,
 					},
-					Spec: labv1alpha1.VirtualClusterSpec{
-						Network: labv1alpha1.VirtualClusterNetworkConfig{
+					Spec: labv1alpha1.ClusterLabSpec{
+						Network: labv1alpha1.ClusterLabNetworkConfig{
 							Type: "internal",
 						},
-						Quota: labv1alpha1.VirtualClusterQuotaConfig{
-							Compute: labv1alpha1.VirtualClusterComputeQuota{
-								CPU:    labv1alpha1.VirtualClusterResourceLimit{Limit: resource.MustParse("2")},
-								Memory: labv1alpha1.VirtualClusterResourceLimit{Limit: resource.MustParse("4Gi")},
+						Quota: labv1alpha1.ClusterLabQuotaConfig{
+							Compute: labv1alpha1.ClusterLabComputeQuota{
+								CPU:    labv1alpha1.ClusterLabResourceLimit{Limit: resource.MustParse("2")},
+								Memory: labv1alpha1.ClusterLabResourceLimit{Limit: resource.MustParse("4Gi")},
 							},
-							Storage: labv1alpha1.VirtualClusterStorageQuota{
+							Storage: labv1alpha1.ClusterLabStorageQuota{
 								Limit: resource.MustParse("30Gi"),
 							},
-							Objects: labv1alpha1.VirtualClusterObjectsQuota{
+							Objects: labv1alpha1.ClusterLabObjectsQuota{
 								PodsLimit:     20,
 								ServicesLimit: 10,
 							},
@@ -78,19 +78,19 @@ var _ = Describe("VirtualCluster Controller", func() {
 		})
 
 		AfterEach(func() {
-			resourceObj := &labv1alpha1.VirtualCluster{}
+			resourceObj := &labv1alpha1.ClusterLab{}
 			if err := k8sClient.Get(ctx, typeNamespacedName, resourceObj); err == nil {
 				By("Removing finalizers for clean test environment teardown")
 				resourceObj.Finalizers = nil
 				_ = k8sClient.Update(ctx, resourceObj)
 
-				By("Cleanup the specific resource instance VirtualCluster")
+				By("Cleanup the specific resource instance ClusterLab")
 				_ = k8sClient.Delete(ctx, resourceObj)
 			}
 		})
 
 		It("should successfully reconcile the resource following Production-grade rules", func() {
-			controllerReconciler := &VirtualClusterReconciler{
+			controllerReconciler := &ClusterLabReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
 			}

@@ -1,10 +1,10 @@
 apiVersion: lab.devops.toiyeuptit.com/v1alpha1
-kind: VirtualCluster
+kind: ClusterLab
 metadata:
   labels:
     app.kubernetes.io/name: typ-operator
     app.kubernetes.io/managed-by: kustomize
-  name: virtualcluster-sample
+  name: clusterlab-sample
 spec:
   ttl: "4h"
   network:

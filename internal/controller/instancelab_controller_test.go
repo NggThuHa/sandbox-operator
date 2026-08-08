@@ -30,10 +30,10 @@ import (
 	labv1alpha1 "github.com/ngtukien/sandbox-operator/api/v1alpha1"
 )
 
-var _ = Describe("VirtualInstance Controller", func() {
+var _ = Describe("InstanceLab Controller", func() {
 	Context("When reconciling a resource", func() {
 		const (
-			resourceName      = "test-virtualinstance-resource"
+			resourceName      = "test-instancelab-resource"
 			resourceNamespace = "default"
 		)
 
@@ -43,22 +43,22 @@ var _ = Describe("VirtualInstance Controller", func() {
 			Name:      resourceName,
 			Namespace: resourceNamespace,
 		}
-		virtualInstance := &labv1alpha1.VirtualInstance{}
+		instanceLab := &labv1alpha1.InstanceLab{}
 
 		BeforeEach(func() {
-			By("creating the custom resource for the Kind VirtualInstance with valid Spec")
-			err := k8sClient.Get(ctx, typeNamespacedName, virtualInstance)
+			By("creating the custom resource for the Kind InstanceLab with valid Spec")
+			err := k8sClient.Get(ctx, typeNamespacedName, instanceLab)
 			if err != nil && errors.IsNotFound(err) {
-				resourceObj := &labv1alpha1.VirtualInstance{
+				resourceObj := &labv1alpha1.InstanceLab{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
 						Namespace: resourceNamespace,
 					},
-					Spec: labv1alpha1.VirtualInstanceSpec{
-						VirtualClusterRef: "parent-virtualcluster-mock",
-						Image:             "ubuntu:24.04",
-						Resources: labv1alpha1.VirtualInstanceResources{
-							Storage: labv1alpha1.VirtualInstanceStorageLimit{
+					Spec: labv1alpha1.InstanceLabSpec{
+						ClusterLabRef: "parent-clusterlab-mock",
+						Image:         "ubuntu:24.04",
+						Resources: labv1alpha1.InstanceLabResources{
+							Storage: labv1alpha1.InstanceLabStorageLimit{
 								Limit: resource.MustParse("10Gi"),
 							},
 						},
@@ -69,19 +69,19 @@ var _ = Describe("VirtualInstance Controller", func() {
 		})
 
 		AfterEach(func() {
-			resourceObj := &labv1alpha1.VirtualInstance{}
+			resourceObj := &labv1alpha1.InstanceLab{}
 			if err := k8sClient.Get(ctx, typeNamespacedName, resourceObj); err == nil {
 				By("Removing finalizers for clean test environment teardown")
 				resourceObj.Finalizers = nil
 				_ = k8sClient.Update(ctx, resourceObj)
 
-				By("Cleanup the specific resource instance VirtualInstance")
+				By("Cleanup the specific resource instance InstanceLab")
 				_ = k8sClient.Delete(ctx, resourceObj)
 			}
 		})
 
 		It("should successfully reconcile the resource without crashing", func() {
-			controllerReconciler := &VirtualInstanceReconciler{
+			controllerReconciler := &InstanceLabReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
 			}
@@ -92,7 +92,7 @@ var _ = Describe("VirtualInstance Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Reconciling Step 2: Checking parent VirtualCluster status and requeueing cleanly")
+			By("Reconciling Step 2: Checking parent ClusterLab status and requeueing cleanly")
 			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
