@@ -174,8 +174,8 @@
       kernel.unprivileged_userns_clone = 1
       kernel.apparmor_restrict_unprivileged_userns = 0
       net.ipv4.ping_group_range = 0 2147483647
-      # [TẠI SAO CẦN THÊM CỜ NÀY?]: Sysbox chạy unprivileged userns. Nếu không set 0 ở cấp độ Host, 
-      # Container sẽ kế thừa giá trị mặc định (1024) của Kernel, dẫn đến lỗi "Permission denied" 
+      # [TẠI SAO CẦN THÊM CỜ NÀY?]: Sysbox chạy unprivileged userns. Nếu không set 0 ở cấp độ Host,
+      # Container sẽ kế thừa giá trị mặc định (1024) của Kernel, dẫn đến lỗi "Permission denied"
       # khi sshd (chạy dưới quyền root ảo) cố gắng bind vào port 22 bên trong container.
       net.ipv4.ip_unprivileged_port_start = 0
     mode: "0644"
@@ -188,8 +188,8 @@
 
 # ------------------------------------------------------------------------------
 # 5. CÀI ĐẶT LXCFS ĐỂ GIẢ LẬP TÀI NGUYÊN BÊN TRONG CONTAINER
-# Lý do: Mặc dù Sysbox có tích hợp sysbox-fs nhưng đôi khi trên K3s/Containerd, 
-# nó không nhận diện được cgroup của Pod để giả lập /proc/meminfo. LXCFS là bắt buộc 
+# Lý do: Mặc dù Sysbox có tích hợp sysbox-fs nhưng đôi khi trên K3s/Containerd,
+# nó không nhận diện được cgroup của Pod để giả lập /proc/meminfo. LXCFS là bắt buộc
 # để lệnh "free -h" hiển thị đúng RAM của Pod (1GB) thay vì RAM host (15GB).
 # ------------------------------------------------------------------------------
 - name: Install LXCFS for container resource virtual display
@@ -210,8 +210,8 @@
 
 # ------------------------------------------------------------------------------
 # 6. [LOẠI BỎ] THIẾT LẬP CẤU HÌNH USER-NAMESPACES CHO K3S
-# Lý do: Tính năng UserNamespacesSupport của K8s (hostUsers: false) xung đột trực tiếp 
-# với cơ chế User Namespace do Sysbox tự quản lý nội bộ. Kích hoạt cờ này sẽ khiến Kubelet 
+# Lý do: Tính năng UserNamespacesSupport của K8s (hostUsers: false) xung đột trực tiếp
+# với cơ chế User Namespace do Sysbox tự quản lý nội bộ. Kích hoạt cờ này sẽ khiến Kubelet
 # tự động can thiệp vào sysctl (như ip_unprivileged_port_start), gây lỗi Permission Denied.
 # ------------------------------------------------------------------------------
 # - name: Create K3s configuration folder
@@ -230,4 +230,3 @@
 #         - "feature-gates=UserNamespacesSupport=true"
 #     mode: "0644"
 #   when: kubernetes_distro | default('k3s') == 'k3s'
-

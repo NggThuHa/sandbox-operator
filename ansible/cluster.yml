@@ -12,9 +12,9 @@
 - name: Phase 1 - Chuẩn bị hạ tầng HĐH & Tiền xử lý (cgroup v2, HWE kernel, tắt swap, sysctl)
   hosts: k8s_cluster
   become: true
-  # [LÝ DO XÓA KHỐI VARS]: 
+  # [LÝ DO XÓA KHỐI VARS]:
   # Trước đây ở đây có khối `vars: kubernetes_distro: "{{ kubernetes_distro | default('kubeadm') }}"`.
-  # Tuy nhiên cách viết này sai cú pháp trầm trọng của Ansible, dẫn đến lỗi "infinite recursion" (đệ quy vô hạn) 
+  # Tuy nhiên cách viết này sai cú pháp trầm trọng của Ansible, dẫn đến lỗi "infinite recursion" (đệ quy vô hạn)
   # nếu user quên truyền tham số -e kubernetes_distro=k3s.
   # Do đó, em đã XÓA TOÀN BỘ các khối vars này ở mọi Phase, thay vào đó ta gọi trực tiếp hàm default() ở mục `when:` bên dưới.
   roles:

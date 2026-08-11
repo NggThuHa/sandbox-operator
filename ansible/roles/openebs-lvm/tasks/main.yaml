@@ -1,53 +1,57 @@
 ---
 # ==============================================================================
 # ROLE: OPENEBS-LVM (CHUẨN BỊ Ổ CỨNG VẬT LÝ CHO OPEN EBS)
-# Mục đích: Tạo ra một Volume Group (VG) LVM từ một file đĩa ảo (Loopback) 
+# Mục đích: Tạo ra một Volume Group (VG) LVM từ một file đĩa ảo (Loopback)
 # để OpenEBS có thể cắt ra thành các ổ đĩa Block Device cho từng máy ảo.
 # Kỹ thuật Loopback file giúp ta có ổ LVM mà KHÔNG cần phải format lại ổ cứng thật!
 # ==============================================================================
 
 - name: Cài đặt gói LVM2 (Công cụ quản lý phân vùng ổ đĩa)
-  apt:
+  ansible.builtin.apt:
     name: lvm2
     state: present
-    update_cache: yes
+    update_cache: true
 
 - name: Kiểm tra xem LVM Volume Group 'openebs-vg' đã tồn tại chưa
-  command: vgdisplay openebs-vg
+  ansible.builtin.command: vgdisplay openebs-vg
   register: vg_check
   failed_when: false
   changed_when: false
 
 - name: Cắt một file đĩa ảo (Loopback Image) với dung lượng chỉ định (Mặc định 50GB)
   # Biến openebs_lvm_pool_size có thể được ghi đè trong inventory/hosts.ini
-  command: truncate -s {{ openebs_lvm_pool_size | default('50G') }} /var/lib/openebs-loop.img
+  ansible.builtin.command: truncate -s {{ openebs_lvm_pool_size | default('50G') }} /var/lib/openebs-loop.img
   args:
     creates: /var/lib/openebs-loop.img
   when: vg_check.rc != 0
 
 - name: "Tìm một thiết bị Loop (loop device) đang trống (VD: /dev/loop0)"
-  command: losetup -f
+  ansible.builtin.command: losetup -f
   register: available_loop
   when: vg_check.rc != 0
   changed_when: false
 
 - name: Gắn file đĩa ảo vào thiết bị Loop vừa tìm được
-  command: losetup {{ available_loop.stdout }} /var/lib/openebs-loop.img
+  ansible.builtin.command: losetup {{ available_loop.stdout }} /var/lib/openebs-loop.img
   when: vg_check.rc != 0
+  changed_when: vg_check.rc != 0
 
 - name: Khởi tạo Physical Volume (PV) trên thiết bị Loop
-  command: pvcreate {{ available_loop.stdout }}
+  ansible.builtin.command: pvcreate {{ available_loop.stdout }}
   when: vg_check.rc != 0
+  changed_when: vg_check.rc != 0
 
 - name: Gộp Physical Volume thành Volume Group (VG) tên là 'openebs-vg'
   # OpenEBS sẽ sử dụng Volume Group này để cấp phát đĩa cho K8s PVC
-  command: vgcreate openebs-vg {{ available_loop.stdout }}
+  ansible.builtin.command: vgcreate openebs-vg {{ available_loop.stdout }}
   when: vg_check.rc != 0
+  changed_when: vg_check.rc != 0
 
 - name: Tạo Systemd Service để giữ thiết bị Loop luôn được mount sau khi Restart máy chủ
   # Khi máy chủ khởi động lại, các thiết bị loop bị mất. Ta cần service này để gắn lại.
-  copy:
+  ansible.builtin.copy:
     dest: /etc/systemd/system/openebs-loop.service
+    mode: '0644'
     content: |
       [Unit]
       Description=Setup Loop Device for OpenEBS LVM
@@ -66,7 +70,7 @@
   when: vg_check.rc != 0
 
 - name: Bật tự khởi động cho openebs-loop systemd service
-  systemd:
+  ansible.builtin.systemd:
     name: openebs-loop
-    enabled: yes
+    enabled: true
   when: vg_check.rc != 0

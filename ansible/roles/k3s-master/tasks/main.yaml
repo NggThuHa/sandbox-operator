@@ -91,6 +91,7 @@
 - name: Tạo file định nghĩa StorageClass cho OpenEBS LVM
   ansible.builtin.copy:
     dest: /tmp/openebs-lvm-sc.yaml
+    mode: "0644"
     content: |
       apiVersion: storage.k8s.io/v1
       kind: StorageClass

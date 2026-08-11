@@ -54,7 +54,7 @@
   ansible.builtin.systemd:
     name: k3s
     state: restarted
-  when: 
+  when:
     - (kubernetes_distro | default('kubeadm')) == 'k3s'
     - inventory_hostname in groups['k8s_master'] | default([])
 
@@ -62,7 +62,7 @@
   ansible.builtin.systemd:
     name: k3s-agent
     state: restarted
-  when: 
+  when:
     - (kubernetes_distro | default('kubeadm')) == 'k3s'
     - inventory_hostname in groups['k8s_workers'] | default([])
 

@@ -50,10 +50,11 @@
     content: |
       # [TẠI SAO PHẢI THÊM FILE NÀY?]
       # Từ phiên bản Containerd 1.7.0+, nó mặc định tự động inject 2 sysctls (ip_unprivileged_port_start và ping_group_range) vào mọi Pod.
-      # Trên Ubuntu 24.04 (Kernel 6.8+), Kernel đã thắt chặt bảo mật, cấm tuyệt đối việc ghi vào 2 file này từ bên trong một unprivileged user namespace (như Sysbox).
+      # Trên Ubuntu 24.04 (Kernel 6.8+), Kernel đã thắt chặt bảo mật, cấm tuyệt đối việc ghi vào 2 file này từ
+      # bên trong một unprivileged user namespace (như Sysbox).
       # Nếu Containerd vẫn cố inject, quá trình tạo Sandbox của Pod sẽ bị crash ngay lập tức với lỗi "permission denied".
       # Giải pháp: Ép Containerd phải "tắt" tính năng tự động inject này bằng cách set enable_unprivileged_ports và icmp thành false.
-      # Thay vì chèn vào file config.toml.tmpl (dễ gây lỗi duplicate table do K3s đã tự động render table này rồi), 
+      # Thay vì chèn vào file config.toml.tmpl (dễ gây lỗi duplicate table do K3s đã tự động render table này rồi),
       # ta tạo một file cấu hình drop-in tại config.toml.d/ để Containerd tự động merge cấu hình một cách an toàn.
       [plugins."io.containerd.grpc.v1.cri"]
         enable_unprivileged_ports = false
