@@ -8,6 +8,7 @@ rules:
   - ""
   resources:
   - namespaces
+  - persistentvolumeclaims
   - pods
   - resourcequotas
   - services
@@ -43,13 +44,45 @@ rules:
   - lab.devops.toiyeuptit.com
   resources:
   - clusterlabs/finalizers
-  - instancelabs/finalizers
   verbs:
   - update
 - apiGroups:
   - lab.devops.toiyeuptit.com
   resources:
   - clusterlabs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - lab.ngtukien.id.vn
+  resources:
+  - clusterlabs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - lab.ngtukien.id.vn
+  resources:
+  - instancelabs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - lab.ngtukien.id.vn
+  resources:
+  - instancelabs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - lab.ngtukien.id.vn
+  resources:
   - instancelabs/status
   verbs:
   - get

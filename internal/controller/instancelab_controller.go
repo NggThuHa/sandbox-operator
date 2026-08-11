@@ -54,11 +54,11 @@ type InstanceLabReconciler struct {
 // KHAI BÁO RBAC MARKERS (Phân Quyền cho InstanceLab Controller)
 // ============================================================================
 
-// +kubebuilder:rbac:groups=lab.devops.toiyeuptit.com,resources=instancelabs,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=lab.devops.toiyeuptit.com,resources=instancelabs/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=lab.devops.toiyeuptit.com,resources=instancelabs/finalizers,verbs=update
-// +kubebuilder:rbac:groups=lab.devops.toiyeuptit.com,resources=clusterlabs,verbs=get;list;watch
-// +kubebuilder:rbac:groups=core,resources=pods;services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=lab.ngtukien.id.vn,resources=instancelabs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=lab.ngtukien.id.vn,resources=instancelabs/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=lab.ngtukien.id.vn,resources=instancelabs/finalizers,verbs=update
+// +kubebuilder:rbac:groups=lab.ngtukien.id.vn,resources=clusterlabs,verbs=get;list;watch
+// +kubebuilder:rbac:groups=core,resources=pods;services;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 
@@ -116,8 +116,16 @@ func (r *InstanceLabReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		targetNamespace = utils.GenerateTargetNamespace(clusterLab.Name)
 	}
 
+	// 4.5. KIẾN TẠO Ổ CỨNG VẬT LÝ ẢO (PersistentVolumeClaim) CHO /workspace (NẾU CẦN)
+	pvc, err := r.reconcileWorkspacePVC(ctx, instanceLab, targetNamespace)
+	if err != nil {
+		log.Error(err, "Failed to reconcile Workspace PVC for InstanceLab")
+		r.updateStatusFailed(ctx, instanceLab, "PVCError", err.Error())
+		return ctrl.Result{}, err
+	}
+
 	// 5. KIẾN TẠO MÁY ẢO DOCKER-IN-DOCKER VỚI SYSBOX RUNTIME (Pod)
-	pod, err := r.reconcileSysboxPod(ctx, instanceLab, targetNamespace)
+	pod, err := r.reconcileSysboxPod(ctx, instanceLab, targetNamespace, pvc)
 	if err != nil {
 		log.Error(err, "Failed to reconcile Sysbox Pod for InstanceLab")
 		r.updateStatusFailed(ctx, instanceLab, "PodError", err.Error())
@@ -194,7 +202,7 @@ func (r *InstanceLabReconciler) reconcileFinalizer(ctx context.Context, instance
 	_ = r.DeleteAllOf(ctx, &networkingv1.Ingress{}, client.InNamespace(targetNs), matchLabels)
 	_ = r.DeleteAllOf(ctx, &corev1.Service{}, client.InNamespace(targetNs), matchLabels)
 	_ = r.DeleteAllOf(ctx, &corev1.Pod{}, client.InNamespace(targetNs), matchLabels)
-	// Không cần xóa PVC vì không còn dùng PVC
+	_ = r.DeleteAllOf(ctx, &corev1.PersistentVolumeClaim{}, client.InNamespace(targetNs), matchLabels)
 
 	log.Info("Successfully cleaned up all workloads in target namespace. Removing Finalizer", "name", instanceLab.Name)
 	controllerutil.RemoveFinalizer(instanceLab, utils.InstanceLabFinalizer)
@@ -205,7 +213,48 @@ func (r *InstanceLabReconciler) reconcileFinalizer(ctx context.Context, instance
 	return ctrl.Result{}, nil
 }
 
-func (r *InstanceLabReconciler) reconcileSysboxPod(ctx context.Context, instanceLab *labv1alpha1.InstanceLab, targetNs string) (*corev1.Pod, error) {
+func (r *InstanceLabReconciler) reconcileWorkspacePVC(ctx context.Context, instanceLab *labv1alpha1.InstanceLab, targetNs string) (*corev1.PersistentVolumeClaim, error) {
+	log := logf.FromContext(ctx)
+	if instanceLab.Spec.Resources.Storage.Limit.IsZero() {
+		return nil, nil // No storage limit, no PVC
+	}
+
+	pvcName := utils.SanitizeName(fmt.Sprintf("%s-workspace", instanceLab.Name), 63)
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pvcName,
+			Namespace: targetNs,
+		},
+	}
+
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, pvc, func() error {
+		if pvc.Labels == nil {
+			pvc.Labels = make(map[string]string)
+		}
+		pvc.Labels[utils.LabelManagedBy] = utils.LabelValueManagedBy
+		pvc.Labels[utils.LabelClusterLab] = instanceLab.Spec.ClusterLabRef
+		pvc.Labels[utils.LabelInstanceLab] = instanceLab.Name
+
+		// Sử dụng StorageClass từ OpenEBS LVM mà ta đã cài đặt qua Ansible
+		scName := "openebs-lvm"
+		pvc.Spec.StorageClassName = &scName
+		pvc.Spec.AccessModes = []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
+		pvc.Spec.Resources = corev1.VolumeResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceStorage: instanceLab.Spec.Resources.Storage.Limit,
+			},
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	log.Info("Reconciled Workspace PVC successfully", "pvcName", pvcName)
+	return pvc, nil
+}
+
+func (r *InstanceLabReconciler) reconcileSysboxPod(ctx context.Context, instanceLab *labv1alpha1.InstanceLab, targetNs string, pvc *corev1.PersistentVolumeClaim) (*corev1.Pod, error) {
 	log := logf.FromContext(ctx)
 	podName := utils.SanitizeName(fmt.Sprintf("%s-sysbox", instanceLab.Name), 63)
 	pod := &corev1.Pod{
@@ -227,8 +276,20 @@ func (r *InstanceLabReconciler) reconcileSysboxPod(ctx context.Context, instance
 		enableServiceLinks := false
 		pod.Spec.EnableServiceLinks = &enableServiceLinks
 
-		hostUsers := false
-		pod.Spec.HostUsers = &hostUsers
+		// Cấu hình bảo mật đặc biệt cho Sysbox (System Container)
+		// 1. SeccompProfile: Unconfined -> Cho phép Sysbox gọi lệnh mount và clone bên trong container.
+		// 2. LXCFS mounts: Đã bị xóa bỏ vì Sysbox v0.6.0+ tích hợp sẵn sysbox-fs giả lập /proc/meminfo và /proc/uptime.
+		// 3. HostUsers: false: Đã bị xóa vì K8s User Namespaces (1.30+) xung đột với userns nội bộ của sysbox-runc.
+		pod.Spec.SecurityContext = &corev1.PodSecurityContext{
+			SeccompProfile: &corev1.SeccompProfile{
+				Type: corev1.SeccompProfileTypeUnconfined,
+			},
+			// K8s 1.30+ yêu cầu tắt AppArmor ở cấp độ Pod (sandbox) để Sysbox-runc
+			// có quyền ghi vào sysctl net.ipv4.ip_unprivileged_port_start
+			AppArmorProfile: &corev1.AppArmorProfile{
+				Type: corev1.AppArmorProfileTypeUnconfined,
+			},
+		}
 
 		if pod.Spec.NodeSelector == nil {
 			pod.Spec.NodeSelector = make(map[string]string)
@@ -248,32 +309,62 @@ func (r *InstanceLabReconciler) reconcileSysboxPod(ctx context.Context, instance
 		var volumes []corev1.Volume
 		var mounts []corev1.VolumeMount
 
-		// lxcfs proc mounts — báo cáo resource chính xác cho Sysbox containers
-		hostPathTypeFile := corev1.HostPathFile
-		lxcfsMounts := []struct {
-			name      string
-			mountPath string
-			hostPath  string
-		}{
-			{"lxcfs-proc-cpuinfo", "/proc/cpuinfo", "/var/lib/lxcfs/proc/cpuinfo"},
-			{"lxcfs-proc-meminfo", "/proc/meminfo", "/var/lib/lxcfs/proc/meminfo"},
-			{"lxcfs-proc-diskstats", "/proc/diskstats", "/var/lib/lxcfs/proc/diskstats"},
-			{"lxcfs-proc-swaps", "/proc/swaps", "/var/lib/lxcfs/proc/swaps"},
-			{"lxcfs-proc-uptime", "/proc/uptime", "/var/lib/lxcfs/proc/uptime"},
+		// [HACK]: Bypass Kernel 6.8 mqueue mount bug in sysbox-runc
+		// Khi Kubelet yêu cầu Containerd mount mqueue, sysbox-runc (với userns) sẽ bị EPERM trên Kernel 6.8
+		// Giải pháp: Ghi đè mount point /dev/mqueue bằng một emptyDir thông thường để Kubelet/Containerd
+		// bỏ qua việc mount mqueue mặc định.
+		volumes = append(volumes, corev1.Volume{
+			Name: "mqueue-bypass",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		})
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      "mqueue-bypass",
+			MountPath: "/dev/mqueue",
+		})
+
+		// [BẮT BUỘC]: Mount LXCFS để giả lập RAM/CPU
+		// Dù Sysbox 0.6.0+ có sysbox-fs, nhưng trên K3s/Containerd nó không hook được cgroup của Pod,
+		// dẫn đến lệnh free -h hiển thị RAM của host. Cần lxcfs để bọc lại.
+		lxcfsMounts := map[string]string{
+			"lxcfs-proc-cpuinfo":   "/proc/cpuinfo",
+			"lxcfs-proc-diskstats": "/proc/diskstats",
+			"lxcfs-proc-meminfo":   "/proc/meminfo",
+			"lxcfs-proc-stat":      "/proc/stat",
+			"lxcfs-proc-swaps":     "/proc/swaps",
+			"lxcfs-proc-uptime":    "/proc/uptime",
 		}
-		for _, l := range lxcfsMounts {
+		hostPathFile := corev1.HostPathFile
+		for name, path := range lxcfsMounts {
 			volumes = append(volumes, corev1.Volume{
-				Name: l.name,
+				Name: name,
 				VolumeSource: corev1.VolumeSource{
 					HostPath: &corev1.HostPathVolumeSource{
-						Path: l.hostPath,
-						Type: &hostPathTypeFile,
+						Path: "/var/lib/lxcfs" + path,
+						Type: &hostPathFile,
 					},
 				},
 			})
 			mounts = append(mounts, corev1.VolumeMount{
-				Name:      l.name,
-				MountPath: l.mountPath,
+				Name:      name,
+				MountPath: path,
+			})
+		}
+
+		// [BẮT BUỘC]: Mount Workspace PVC nếu có (Dùng cho OpenEBS LVM Block Storage)
+		if pvc != nil {
+			volumes = append(volumes, corev1.Volume{
+				Name: "workspace-volume",
+				VolumeSource: corev1.VolumeSource{
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+						ClaimName: pvc.Name,
+					},
+				},
+			})
+			mounts = append(mounts, corev1.VolumeMount{
+				Name:      "workspace-volume",
+				MountPath: "/workspace",
 			})
 		}
 
@@ -287,8 +378,10 @@ func (r *InstanceLabReconciler) reconcileSysboxPod(ctx context.Context, instance
 		}
 
 		image := instanceLab.Spec.Image
-		if image == "" {
-			image = "ubuntu:24.04"
+		if image == "" || image == "ubuntu:24.04" {
+			// [QUAN TRỌNG]: Đổi image mặc định sang bản có systemd
+			// Sysbox cần chạy /sbin/init (systemd). Image ubuntu:24.04 gốc của Docker KHÔNG có systemd.
+			image = "nestybox/ubuntu-jammy-systemd:latest"
 		}
 
 		container := corev1.Container{
@@ -298,6 +391,27 @@ func (r *InstanceLabReconciler) reconcileSysboxPod(ctx context.Context, instance
 			VolumeMounts:    mounts,
 			Ports:           containerPorts,
 			Command:         []string{"/sbin/init"},
+			Lifecycle: &corev1.Lifecycle{
+				PostStart: &corev1.LifecycleHandler{
+					Exec: &corev1.ExecAction{
+						// [TRICK ẨN CẤU HÌNH HOST HOÀN TOÀN]:
+						// 1. Che df: Dùng wrapper script ẩn các phân vùng host và tmpfs.
+						// 2. Che lsblk/fdisk: Đè tmpfs trống lên /sys/block và /sys/class/block.
+						Command: []string{
+							"/bin/bash",
+							"-c",
+							"echo -e '#!/bin/bash\n/usr/bin/df \"$@\" | grep -vE \"^overlay|^tmpfs|^shm|^/dev/nvme|^/dev/sda|^/dev/vda\"' > /usr/local/bin/df && chmod +x /usr/local/bin/df && mount -t tmpfs tmpfs /sys/block && mount -t tmpfs tmpfs /sys/class/block",
+						},
+					},
+				},
+			},
+			SecurityContext: &corev1.SecurityContext{
+				// Tắt AppArmor (Unconfined) vì AppArmor mặc định của Ubuntu sẽ chặn sysbox mount các file hệ thống
+				// Tuy nhiên lưu ý: Ubuntu 24.04 + Sysbox 0.7.0 có bug kernel 6.8 vẫn sẽ chặn (cần update Sysbox 0.7.1+)
+				AppArmorProfile: &corev1.AppArmorProfile{
+					Type: corev1.AppArmorProfileTypeUnconfined,
+				},
+			},
 		}
 
 		resList := corev1.ResourceRequirements{
@@ -323,8 +437,13 @@ func (r *InstanceLabReconciler) reconcileSysboxPod(ctx context.Context, instance
 			container.Resources = resList
 		}
 
-		pod.Spec.Volumes = volumes
-		pod.Spec.Containers = []corev1.Container{container}
+		// K8s Pods are immutable for most fields (like Volumes and Containers)
+		// We only set them during creation.
+		if pod.CreationTimestamp.IsZero() {
+			pod.Spec.Volumes = volumes
+			pod.Spec.Containers = []corev1.Container{container}
+		}
+
 		return nil
 	})
 

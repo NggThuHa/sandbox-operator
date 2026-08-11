@@ -172,6 +172,12 @@
       net.bridge.bridge-nf-call-ip6tables = 1
       net.ipv4.ip_forward = 1
       kernel.unprivileged_userns_clone = 1
+      kernel.apparmor_restrict_unprivileged_userns = 0
+      net.ipv4.ping_group_range = 0 2147483647
+      # [TẠI SAO CẦN THÊM CỜ NÀY?]: Sysbox chạy unprivileged userns. Nếu không set 0 ở cấp độ Host, 
+      # Container sẽ kế thừa giá trị mặc định (1024) của Kernel, dẫn đến lỗi "Permission denied" 
+      # khi sshd (chạy dưới quyền root ảo) cố gắng bind vào port 22 bên trong container.
+      net.ipv4.ip_unprivileged_port_start = 0
     mode: "0644"
 
 - name: Apply sysctl configuration immediately
@@ -181,7 +187,10 @@
   failed_when: false
 
 # ------------------------------------------------------------------------------
-# 5. CÀI ĐẶT LXCFS HỖ TRỢ VIRTUALIZE TÀI NGUYÊN CONTAINER (OPTIONAL)
+# 5. CÀI ĐẶT LXCFS ĐỂ GIẢ LẬP TÀI NGUYÊN BÊN TRONG CONTAINER
+# Lý do: Mặc dù Sysbox có tích hợp sysbox-fs nhưng đôi khi trên K3s/Containerd, 
+# nó không nhận diện được cgroup của Pod để giả lập /proc/meminfo. LXCFS là bắt buộc 
+# để lệnh "free -h" hiển thị đúng RAM của Pod (1GB) thay vì RAM host (15GB).
 # ------------------------------------------------------------------------------
 - name: Install LXCFS for container resource virtual display
   ansible.builtin.apt:
@@ -200,21 +209,25 @@
   failed_when: false
 
 # ------------------------------------------------------------------------------
-# 6. THIẾT LẬP CẤU HÌNH USER-NAMESPACES CHO K3S (CHỈ CHẠY KHI LÀ CỤM K3S)
+# 6. [LOẠI BỎ] THIẾT LẬP CẤU HÌNH USER-NAMESPACES CHO K3S
+# Lý do: Tính năng UserNamespacesSupport của K8s (hostUsers: false) xung đột trực tiếp 
+# với cơ chế User Namespace do Sysbox tự quản lý nội bộ. Kích hoạt cờ này sẽ khiến Kubelet 
+# tự động can thiệp vào sysctl (như ip_unprivileged_port_start), gây lỗi Permission Denied.
 # ------------------------------------------------------------------------------
-- name: Create K3s configuration folder
-  ansible.builtin.file:
-    path: /etc/rancher/k3s
-    state: directory
-    mode: "0755"
-  when: kubernetes_distro | default('k3s') == 'k3s'
+# - name: Create K3s configuration folder
+#   ansible.builtin.file:
+#     path: /etc/rancher/k3s
+#     state: directory
+#     mode: "0755"
+#   when: kubernetes_distro | default('k3s') == 'k3s'
+#
+# - name: Write default K3s config with UserNamespaces feature gate enabled
+#   ansible.builtin.copy:
+#     dest: /etc/rancher/k3s/config.yaml
+#     content: |
+#       write-kubeconfig-mode: "0644"
+#       kubelet-arg:
+#         - "feature-gates=UserNamespacesSupport=true"
+#     mode: "0644"
+#   when: kubernetes_distro | default('k3s') == 'k3s'
 
-- name: Write default K3s config with UserNamespaces feature gate enabled
-  ansible.builtin.copy:
-    dest: /etc/rancher/k3s/config.yaml
-    content: |
-      write-kubeconfig-mode: "0644"
-      kubelet-arg:
-        - "feature-gates=UserNamespacesSupport=true"
-    mode: "0644"
-  when: kubernetes_distro | default('k3s') == 'k3s'

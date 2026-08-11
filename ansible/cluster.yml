@@ -12,11 +12,16 @@
 - name: Phase 1 - Chuẩn bị hạ tầng HĐH & Tiền xử lý (cgroup v2, HWE kernel, tắt swap, sysctl)
   hosts: k8s_cluster
   become: true
-  vars:
-    kubernetes_distro: "{{ kubernetes_distro | default('kubeadm') }}"
+  # [LÝ DO XÓA KHỐI VARS]: 
+  # Trước đây ở đây có khối `vars: kubernetes_distro: "{{ kubernetes_distro | default('kubeadm') }}"`.
+  # Tuy nhiên cách viết này sai cú pháp trầm trọng của Ansible, dẫn đến lỗi "infinite recursion" (đệ quy vô hạn) 
+  # nếu user quên truyền tham số -e kubernetes_distro=k3s.
+  # Do đó, em đã XÓA TOÀN BỘ các khối vars này ở mọi Phase, thay vào đó ta gọi trực tiếp hàm default() ở mục `when:` bên dưới.
   roles:
     - role: common
       tags: ['common', 'preflight']
+    - role: openebs-lvm
+      tags: ['storage', 'openebs']
     - role: containerd
       tags: ['containerd', 'runtime']
       when: (kubernetes_distro | default('kubeadm')) == 'kubeadm'
@@ -27,8 +32,6 @@
 - name: Phase 2 - Khởi tạo Control Plane (Master Node & CNI)
   hosts: k8s_master
   become: true
-  vars:
-    kubernetes_distro: "{{ kubernetes_distro | default('kubeadm') }}"
   roles:
     - role: kubeadm-master
       tags: ['master', 'kubeadm-master', 'control-plane', 'cni']
@@ -40,8 +43,6 @@
 - name: Phase 3 - Khởi tạo Worker Nodes và kết nạp (join) vào Cụm Master
   hosts: k8s_workers
   become: true
-  vars:
-    kubernetes_distro: "{{ kubernetes_distro | default('kubeadm') }}"
   roles:
     - role: kubeadm-worker
       tags: ['worker', 'kubeadm-worker', 'join']
@@ -53,8 +54,6 @@
 - name: Phase 4 - Cấu hình Containerd cho K3S (Chỉ áp dụng khi chạy K3s)
   hosts: k8s_cluster
   become: true
-  vars:
-    kubernetes_distro: "{{ kubernetes_distro | default('kubeadm') }}"
   tasks:
     - name: Include K3s specific containerd template tasks
       ansible.builtin.include_role:
@@ -64,10 +63,8 @@
       tags: ['containerd', 'k3s-runtime']
 
 - name: Phase 5 - Triển khai Sysbox Engine & RuntimeClass cho toàn bộ Cụm
-  hosts: k8s_master
+  hosts: k8s_cluster
   become: true
-  vars:
-    kubernetes_distro: "{{ kubernetes_distro | default('kubeadm') }}"
   roles:
     - role: sysbox
       tags: ['sysbox', 'runtime-class']

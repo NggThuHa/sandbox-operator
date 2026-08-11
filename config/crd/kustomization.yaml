@@ -3,8 +3,8 @@
 # It should be run by config/default
 resources:
 
-- bases/lab.devops.toiyeuptit.com_clusterlabs.yaml
-- bases/lab.devops.toiyeuptit.com_instancelabs.yaml
+- bases/lab.ngtukien.id.vn_clusterlabs.yaml
+- bases/lab.ngtukien.id.vn_instancelabs.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

@@ -47,28 +47,30 @@
     remote_src: true
     mode: "0600"
 
-- name: Get home directory of ansible_user if not root
-  ansible.builtin.user:
-    name: "{{ ansible_user }}"
-  register: kubeadm_master_user_info
-  when: ansible_user is defined and ansible_user != 'root'
+- name: Lấy thông tin user thật sự đang chạy lệnh (tránh bị đè bởi sudo)
+  ansible.builtin.set_fact:
+    real_user: "{{ lookup('env', 'USER') }}"
+    real_home: "{{ lookup('env', 'HOME') }}"
+  become: false
 
-- name: Create .kube directory for ansible_user
+- name: Create .kube directory for real user
   ansible.builtin.file:
-    path: "{{ kubeadm_master_user_info.home }}/.kube"
+    path: "{{ real_home }}/.kube"
     state: directory
-    owner: "{{ ansible_user }}"
+    owner: "{{ real_user }}"
     mode: "0755"
-  when: ansible_user is defined and ansible_user != 'root' and kubeadm_master_user_info.home is defined
+  become: true
+  when: real_user != 'root'
 
-- name: Copy admin.conf to ansible_user kubeconfig
+- name: Copy admin.conf to real user kubeconfig
   ansible.builtin.copy:
     src: /etc/kubernetes/admin.conf
-    dest: "{{ kubeadm_master_user_info.home }}/.kube/config"
+    dest: "{{ real_home }}/.kube/config"
     remote_src: true
-    owner: "{{ ansible_user }}"
+    owner: "{{ real_user }}"
     mode: "0600"
-  when: ansible_user is defined and ansible_user != 'root' and kubeadm_master_user_info.home is defined
+  become: true
+  when: real_user != 'root'
 
 - name: Deploy Calico CNI networking plugin
   ansible.builtin.command:

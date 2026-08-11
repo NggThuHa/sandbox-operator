@@ -1,8 +1,26 @@
 ---
 # ==============================================================================
-# ROLE SYSBOX: TRIỂN KHAI ĐỘNG CƠ CONTAINER-IN-CONTAINER VÀ RUNTIMECLASS (K3S / KUBEADM)
+# ROLE SYSBOX: TRIỂN KHAI ĐỘNG CƠ CONTAINER-IN-CONTAINER VÀ RUNTIMECLASS
+# (Cài đặt vật lý qua file .deb thay vì DaemonSet để fix lỗi tương thích Kernel 6.8)
 # ==============================================================================
-- name: Wait for all cluster nodes (Master & Workers) to register as Ready in K8s
+- name: Tải file cài đặt Sysbox 0.7.1
+  ansible.builtin.get_url:
+    url: "https://downloads.nestybox.com/sysbox/releases/v0.7.1/sysbox-ce_0.7.1-0.linux_amd64.deb"
+    dest: "/tmp/sysbox.deb"
+    mode: "0644"
+
+- name: Cài đặt Sysbox trực tiếp qua gói deb (Bypass lỗi Kernel 6.8+ U24.04)
+  ansible.builtin.apt:
+    deb: "/tmp/sysbox.deb"
+    state: present
+
+- name: Khởi động lại dịch vụ Sysbox để áp dụng cấu hình
+  ansible.builtin.systemd:
+    name: sysbox
+    state: restarted
+    enabled: true
+
+- name: Đợi tất cả các node trong cụm K8s sẵn sàng (Chạy trên Master)
   ansible.builtin.command:
     cmd: "{{ sysbox_kubectl }} wait --for=condition=Ready node --all --timeout=300s"
   changed_when: false
@@ -10,47 +28,45 @@
   delay: 10
   register: sysbox_wait_nodes
   until: sysbox_wait_nodes.rc == 0
+  run_once: true
+  delegate_to: "{{ groups['k8s_master'][0] | default(inventory_hostname) }}"
 
-- name: Label ALL cluster nodes for Sysbox automated installation
+- name: Đánh nhãn (Label) cho tất cả các node (Chạy trên Master)
   ansible.builtin.command:
     cmd: "{{ sysbox_kubectl }} label nodes --all sysbox-install=yes --overwrite"
   changed_when: false
+  run_once: true
+  delegate_to: "{{ groups['k8s_master'][0] | default(inventory_hostname) }}"
 
-- name: Apply Sysbox DaemonSet installer manifest
-  ansible.builtin.command:
-    cmd: "{{ sysbox_kubectl }} apply -f {{ sysbox_manifest_url }}"
-  changed_when: true
-
-- name: Wait for Sysbox installer pods to converge in kube-system namespace
-  ansible.builtin.shell:
-    cmd: "set -o pipefail && {{ sysbox_kubectl }} get pods -n kube-system | grep -i sysbox"
-    executable: /bin/bash
-  register: sysbox_pods
-  retries: 30
-  delay: 10
-  until: sysbox_pods.rc == 0
-  changed_when: false
-
-- name: Wait for sysbox-runc binary to be materialized across systems
+- name: Đợi sysbox-runc xuất hiện trên hệ thống (Cục bộ)
   ansible.builtin.wait_for:
     path: /usr/bin/sysbox-runc
     state: present
-    timeout: 600
-  when: ansible_virtualization_type | default('') != "docker"
+    timeout: 120
 
-- name: Ensure Sysbox daemon systemd services are active and enabled
+- name: Khởi động lại Kubelet (nếu dùng Kubeadm) để nhận diện RuntimeClass mới
   ansible.builtin.systemd:
-    name: "{{ item }}"
-    state: started
-    enabled: true
-  loop:
-    - sysbox
-    - sysbox-fs
-    - sysbox-mgr
-  when: ansible_virtualization_type | default('') != "docker"
-  failed_when: false
+    name: kubelet
+    state: restarted
+  when: (kubernetes_distro | default('kubeadm')) == 'kubeadm'
 
-- name: Create Sysbox RuntimeClass resource definition
+- name: Khởi động lại K3s Server (trên Master) để nhận diện RuntimeClass mới
+  ansible.builtin.systemd:
+    name: k3s
+    state: restarted
+  when: 
+    - (kubernetes_distro | default('kubeadm')) == 'k3s'
+    - inventory_hostname in groups['k8s_master'] | default([])
+
+- name: Khởi động lại K3s Agent (trên Worker) để nhận diện RuntimeClass mới
+  ansible.builtin.systemd:
+    name: k3s-agent
+    state: restarted
+  when: 
+    - (kubernetes_distro | default('kubeadm')) == 'k3s'
+    - inventory_hostname in groups['k8s_workers'] | default([])
+
+- name: Tạo định nghĩa Sysbox RuntimeClass (Chạy trên Master)
   ansible.builtin.copy:
     dest: /tmp/sysbox-runtimeclass.yaml
     content: |
@@ -60,33 +76,26 @@
         name: sysbox-runc
       handler: sysbox-runc
     mode: "0644"
+  run_once: true
+  delegate_to: "{{ groups['k8s_master'][0] | default(inventory_hostname) }}"
 
-- name: Apply Sysbox RuntimeClass into Kubernetes cluster
+- name: Apply Sysbox RuntimeClass vào cụm Kubernetes (Chạy trên Master)
   ansible.builtin.command:
     cmd: "{{ sysbox_kubectl }} apply -f /tmp/sysbox-runtimeclass.yaml"
   changed_when: true
+  run_once: true
+  delegate_to: "{{ groups['k8s_master'][0] | default(inventory_hostname) }}"
 
-- name: Verify Traefik Ingress Controller availability (K3s specific)
-  ansible.builtin.command:
-    cmd: >-
-      {{ sysbox_kubectl }} wait --namespace kube-system
-      --for=condition=ready pod
-      --selector=app.kubernetes.io/name=traefik
-      --timeout=180s
-  register: sysbox_traefik_ready
-  retries: 5
-  delay: 10
-  until: sysbox_traefik_ready.rc == 0
-  changed_when: false
-  when: kubernetes_distro | default('k3s') == 'k3s'
-
-- name: Display cluster readiness status and RuntimeClass
+- name: In ra thông báo trạng thái cụm K8s (Chạy trên Master)
   ansible.builtin.shell:
     cmd: "{{ sysbox_kubectl }} get nodes -o wide && {{ sysbox_kubectl }} get runtimeclass"
     executable: /bin/bash
   register: sysbox_cluster_summary
   changed_when: false
+  run_once: true
+  delegate_to: "{{ groups['k8s_master'][0] | default(inventory_hostname) }}"
 
-- name: Print finalized Master/Worker cluster summary
+- name: Tổng hợp kết quả cài đặt Sysbox
   ansible.builtin.debug:
     var: sysbox_cluster_summary.stdout_lines
+  run_once: true

@@ -11,8 +11,16 @@
 - name: Ensure containerd config template base header exists
   ansible.builtin.copy:
     dest: "{{ common_containerd_template }}"
-    content: "{{ '{{ template \"base\" . }}' }}\n"
-    force: false
+    content: |
+      # [TẠI SAO PHẢI THÊM IMPORTS?]
+      # K3s v1.28+ tự động đọc cấu hình từ thư mục config.toml.d, nhưng NẾU chúng ta ghi đè file config.toml.tmpl,
+      # tính năng này sẽ bị mất đi. Do đó, ta phải chủ động khai báo lại dòng imports này ở đầu file,
+      # để đảm bảo Containerd chịu đọc cái file 99-sysbox-sysctls.toml (nơi chứa cờ tắt unprivileged_ports) mà ta vừa tạo.
+      imports = [
+        "/var/lib/rancher/k3s/agent/etc/containerd/config.toml.d/*.toml"
+      ]
+      {{ '{{ template "base" . }}' }}
+    force: true
     mode: "0644"
 
 - name: Inject sysbox-runc runtime and slow_chown option into containerd template
@@ -29,6 +37,28 @@
 
       [plugins."io.containerd.snapshotter.v1.overlayfs"]
         slow_chown = true
+
+- name: Ensure containerd config.toml.d directory exists
+  ansible.builtin.file:
+    path: /var/lib/rancher/k3s/agent/etc/containerd/config.toml.d
+    state: directory
+    mode: "0755"
+
+- name: Drop containerd config for unprivileged sysctls to bypass Kernel 6.8 restrictions
+  ansible.builtin.copy:
+    dest: /var/lib/rancher/k3s/agent/etc/containerd/config.toml.d/99-sysbox-sysctls.toml
+    content: |
+      # [TẠI SAO PHẢI THÊM FILE NÀY?]
+      # Từ phiên bản Containerd 1.7.0+, nó mặc định tự động inject 2 sysctls (ip_unprivileged_port_start và ping_group_range) vào mọi Pod.
+      # Trên Ubuntu 24.04 (Kernel 6.8+), Kernel đã thắt chặt bảo mật, cấm tuyệt đối việc ghi vào 2 file này từ bên trong một unprivileged user namespace (như Sysbox).
+      # Nếu Containerd vẫn cố inject, quá trình tạo Sandbox của Pod sẽ bị crash ngay lập tức với lỗi "permission denied".
+      # Giải pháp: Ép Containerd phải "tắt" tính năng tự động inject này bằng cách set enable_unprivileged_ports và icmp thành false.
+      # Thay vì chèn vào file config.toml.tmpl (dễ gây lỗi duplicate table do K3s đã tự động render table này rồi), 
+      # ta tạo một file cấu hình drop-in tại config.toml.d/ để Containerd tự động merge cấu hình một cách an toàn.
+      [plugins."io.containerd.grpc.v1.cri"]
+        enable_unprivileged_ports = false
+        enable_unprivileged_icmp = false
+    mode: "0644"
 
 - name: Restart K3s Server service (on Master nodes) to reload containerd
   ansible.builtin.systemd:

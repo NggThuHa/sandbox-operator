@@ -42,19 +42,26 @@
     k3s_node_token: "{{ k3s_master_token_b64['content'] | b64decode | trim }}"
     k3s_master_ip: "{{ k3s_api_host }}"
 
+- name: Lấy thông tin user thật sự đang chạy lệnh (tránh bị đè bởi sudo)
+  ansible.builtin.set_fact:
+    real_user: "{{ lookup('env', 'USER') }}"
+    real_home: "{{ lookup('env', 'HOME') }}"
+  become: false
+
 - name: Create .kube directory in admin home folder
   ansible.builtin.file:
-    path: "~/.kube"
+    path: "{{ real_home }}/.kube"
     state: directory
+    owner: "{{ real_user }}"
     mode: "0755"
-  become: false
+  become: true
 
 - name: Copy kubeconfig to admin home folder on Master node
   ansible.builtin.copy:
     src: "{{ kubeconfig_remote }}"
-    dest: "~/.kube/config"
+    dest: "{{ real_home }}/.kube/config"
     remote_src: true
-    owner: "{{ ansible_user | default(ansible_env.USER) }}"
+    owner: "{{ real_user }}"
     mode: "0600"
   become: true
 
@@ -71,3 +78,31 @@
     path: ./k3s.yaml
     regexp: 'https://(127\.0\.0\.1|localhost):6443'
     replace: 'https://{{ k3s_master_ip }}:6443'
+
+# ==============================================================================
+# DEPLOY OPENEBS LVM CSI DRIVER & STORAGE CLASS
+# ==============================================================================
+
+- name: Áp dụng cấu hình OpenEBS LVM Operator từ thư viện Github
+  ansible.builtin.command:
+    cmd: k3s kubectl apply -f https://raw.githubusercontent.com/openebs/lvm-localpv/master/deploy/lvm-operator.yaml
+  changed_when: false
+
+- name: Tạo file định nghĩa StorageClass cho OpenEBS LVM
+  ansible.builtin.copy:
+    dest: /tmp/openebs-lvm-sc.yaml
+    content: |
+      apiVersion: storage.k8s.io/v1
+      kind: StorageClass
+      metadata:
+        name: openebs-lvm
+      provisioner: local.csi.openebs.io
+      parameters:
+        storage: "lvm"
+        volgroup: "openebs-vg"
+  become: true
+
+- name: Áp dụng StorageClass vào cụm K3s
+  ansible.builtin.command:
+    cmd: k3s kubectl apply -f /tmp/openebs-lvm-sc.yaml
+  changed_when: false

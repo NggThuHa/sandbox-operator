@@ -24,7 +24,7 @@ graph TD
         VC -->|3. Bảo mật Cách ly| NP[🛡️ NetworkPolicy<br/>Block Ingress / Open Egress]
         
         VI -->|4. Khởi tạo| Pod[🚀 Sysbox Pod<br/>RuntimeClass: sysbox-runc]
-        VI -->|5. Lưu trữ Dữ liệu| PVC[💾 PersistentVolumeClaim<br/>Longhorn / Local Storage]
+        VI -->|5. Lưu trữ Dữ liệu| PVC[💾 PersistentVolumeClaim<br/>OpenEBS LVM / Local Storage]
         VI -->|6. Gán Cổng TCP| SVC[🌐 ClusterIP Service]
     end
 
@@ -38,8 +38,11 @@ graph TD
 
 ### 2. `InstanceLab` — Máy Ảo Thực Thao Sysbox-Ready
 * **Động cơ Sysbox (`sysbox-runc`):** Vận hành container như một hệ điều hành trọn vẹn (cho phép chạy systemd, Docker, Kubernetes K8s-in-K8s bên trong Pod mà không cần cờ đặc quyền nhạy cảm `privileged: true`).
-* **Hạ tầng Lưu trữ & Truy Cập Động:** 
-  * Tự động phán đoán và quy hoạch lớp lưu trữ (`StorageClass`) và lớp điều hướng (`IngressClass`) với 3 tầng ưu tiên: **Biến môi trường ENV > Tùy chỉnh trong Spec > Mặc định hệ thống**.
+* **Hạ tầng Lưu trữ Độc lập (OpenEBS LVM):** 
+  * Tự động cấp phát ổ cứng ảo (PersistentVolumeClaim) cho từng máy ảo thông qua **OpenEBS LVM CSI Driver** (StorageClass `openebs-lvm`). Ổ cứng này được mount vào `/workspace` giúp cô lập dung lượng hoàn toàn, vượt qua giới hạn của OverlayFS truyền thống.
+* **Hệ thống Ẩn Danh Phần Cứng (Host Obfuscation):**
+  * Tích hợp cơ chế `PostStart` hook tự động che giấu ổ đĩa vật lý (NVMe/SSD) và cấu hình máy chủ thật khỏi các lệnh soi hệ thống (`df -h`, `lsblk`, `fdisk`) bằng cách ảo hóa `/sys/block` và tiêm wrapper script. Sinh viên không thể biết được cấu hình máy chủ thật bên dưới.
+* **Truy cập Động & WebSocket Secure:** 
   * Tự động xuất xưởng Domain HTTPS đi kèm chứng chỉ TLS hợp lệ (Cert-Manager) và luồng băng thông **WSS (WebSocket Secure)** tương thích 100% với các dịch vụ Terminal Web-based (như `ttyd`, `code-server`).
 
 ---
@@ -61,29 +64,47 @@ ansible/
 └── roles/                         # Bộ động cơ tự động hóa chuyên sâu (common, containerd, kubeadm-*, k3s-*, sysbox)
 ```
 
-### Cách Thực Thi Khởi Tạo & Quản Trị Cụm
+### Cài Đặt Ansible & Thực Thi Khởi Tạo (Zero-Clone)
 
-#### 1. Triển khai chuẩn (Kubeadm v1.35 & Calico - Mặc định) hoặc K3s:
-Cấu hình IP trong **`ansible/inventory/lab-cluster/hosts.ini`**, sau đó chạy:
+Thay vì clone mã nguồn thủ công hay tải file nén, bạn có thể sử dụng công cụ `ansible-pull` để kéo thẳng repo từ Github và cài đặt hệ thống chỉ với vài dòng lệnh.
+
+#### 1. Cài đặt Ansible trên máy chủ (Nếu chưa có)
+Ubuntu / Debian:
 ```bash
-cd ansible
-# Chạy mặc định với Kubeadm:
-ansible-playbook cluster.yml
-
-# Chạy linh hoạt với K3s (Edge/Nhẹ):
-ansible-playbook cluster.yml -e kubernetes_distro=k3s
+sudo apt update && sudo apt install -y software-properties-common
+sudo apt-add-repository --yes --update ppa:ansible/ansible
+sudo apt install -y ansible git curl
 ```
 
-#### 2. ⚡ Thực thi Playbook Đơn Trực Tiếp (Zero-Clone / Không cần tải repo):
-Với các kịch bản cài đặt siêu nhanh (Cloud-init / User-data) hoặc thi hành các playbook cấu hình độc lập file đơn (single-file), bạn có thể dùng `curl` lấy trực tiếp YAML từ GitHub và truyền qua ống dẫn vào `ansible-playbook` mà **không cần chạy lệnh `git clone`**:
-```bash
-# Thực thi trực tiếp cho máy Local (qua stdin):
-curl -fsSL https://raw.githubusercontent.com/ngtukien/sandbox-operator/main/ansible/<ten-playbook-don>.yml | ansible-playbook -i "localhost," -c local /dev/stdin
+#### 2. Khởi tạo cụm K8s Lab ngay trên máy cục bộ (Localhost All-in-one)
+Để Ansible nhận diện máy hiện tại là Master Node của cụm, chạy 2 block lệnh sau:
 
-# Thực thi trực tiếp cho các máy chủ Remote (qua Process Substitution):
-ansible-playbook -i "192.168.123.124,192.168.123.125," -u ubuntu <(curl -fsSL https://raw.githubusercontent.com/ngtukien/sandbox-operator/main/ansible/<ten-playbook-don>.yml)
+```bash
+# Bước A: Tạo file inventory tạm khai báo máy cục bộ
+cat <<EOF > /tmp/hosts.ini
+[k8s_master]
+localhost ansible_connection=local
+
+[k8s_workers]
+
+[k8s_cluster:children]
+k8s_master
+k8s_workers
+EOF
+
+# Bước B: Tự động kéo mã nguồn và cài đặt K3s + Sysbox
+ansible-pull -K -U https://github.com/ngtukien/sandbox-operator.git -i /tmp/hosts.ini ansible/cluster.yml -e kubernetes_distro=k3s
+
+# Hoặc nếu bạn muốn dùng Kubeadm chuẩn thay vì K3s:
+ansible-pull -K -U https://github.com/ngtukien/sandbox-operator.git -i /tmp/hosts.ini ansible/cluster.yml
+
+# Bước C: Cấu hình KUBECONFIG để sử dụng lệnh kubectl
+# Với K3s:
+mkdir -p ~/.kube && sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config && sudo chown $USER:$USER ~/.kube/config
+# Với Kubeadm:
+mkdir -p ~/.kube && sudo cp /etc/kubernetes/admin.conf ~/.kube/config && sudo chown $USER:$USER ~/.kube/config
 ```
-*(Chi tiết tham khảo đầy đủ tại [ansible/README.md](file:///home/ngtukien/Documents/Kubebuilder/ansible/README.md))*
+*(Để xem cách cấu hình cho cụm gồm nhiều máy chủ Multi-node, hãy tham khảo [ansible/README.md](ansible/README.md))*
 
 
 ---
@@ -189,15 +210,8 @@ spec:
     memory:
       request: "2Gi"
       limit: "4Gi"
-  storage:
-    root:
-      size: "15Gi"
-      type: local            # Ổ Root I/O cực cao từ local-path
-    dataVolumes:
-      - name: docker-data
-        mountPath: /var/lib/docker
-        size: "20Gi"
-        type: network        # Ổ Dữ liệu lưu vết phân tán từ longhorn
+    storage:
+      limit: "5Gi"           # Tự động mount PVC OpenEBS LVM 5GB vào /workspace
   ports:
     - name: web-terminal
       port: 80

@@ -165,8 +165,8 @@ status:
       protocol: "TCP"
       internalAddress: "http://sample-instancelab-master-svc.sample-clusterlab-x7z9a.svc.cluster.local:22"
   
-  # Không có volumesStatus vì không dùng volume rìiêng
-  # Disk được kiểm soát qua ephemeral-storage limit trên container
+  # Danh sách ổ đĩa PVC đã được khởi tạo và bind thành công
+  # (Sẽ bổ sung trong tương lai nếu cần expose trạng thái PVC)
 
   # Chuẩn điều kiện Kubernetes (metav1.Condition)
   conditions:
@@ -233,8 +233,14 @@ Controller này đóng vai trò là **"Người vận hành máy ảo"**, chịu
 * `resolveParentClusterLab(ctx, instanceLab)` *(Bước xác thực tiên quyết & Gán OwnerReference)*:
   * **Nhiệm vụ:** Đọc trường `spec.clusterLabRef`, tìm `ClusterLab` cha trong cùng Namespace mẹ để kiểm tra xem đã ở phase `Running` hay chưa.
   * **Xử lý Logic:** Nếu cụm cha chưa sẵn sàng -> Báo `Phase: Pending / WaitingForCluster`. Nếu cụm cha đã sẵn sàng -> Thiết lập **`OwnerReference` của InstanceLab trỏ về ClusterLab** (giúp Cascade delete các CR) và lấy chuỗi `status.targetNamespace` làm địa bàn triển khai workload bên dưới.
-* `reconcileSysboxPod(ctx, instanceLab, targetNamespace)`:
-  * **Nhiệm vụ:** Tạo `corev1.Pod` với `runtimeClassName: sysbox-runc`, set `resources.limits.ephemeral-storage` từ `spec.resources.storage.limit`. Không tạo PVC hay emptyDir riêng.
+* `reconcileSysboxPod(ctx, instanceLab, targetNamespace, pvcName)`:
+  * **Nhiệm vụ:** Tạo `corev1.Pod` với `runtimeClassName: sysbox-runc`. Tự động mount PVC vào thư mục `/workspace` để cấp phát vùng lưu trữ an toàn, độc lập cho sinh viên.
+  * **Trick Bảo mật Host:** Sử dụng `Lifecycle.PostStart` để tiêm các lệnh che giấu thông tin cấu hình máy chủ vật lý (ẩn `/sys/block` tránh `lsblk` và tạo wrapper cho `df`).
+* `reconcilePVC(ctx, instanceLab, targetNamespace)`:
+  * **Nhiệm vụ:** Đọc trường `spec.resources.storage.limit` và tự động sinh ra `PersistentVolumeClaim` (PVC) sử dụng StorageClass `openebs-lvm`.
+  * **Lợi ích:** Đảm bảo mỗi máy ảo có một ổ đĩa thật (LVM Logical Volume) được cách ly dung lượng tuyệt đối, vượt qua giới hạn của OverlayFS.
+* `reconcileFinalizer(ctx, instanceLab)`:
+  * **Nhiệm vụ:** Cấu hình Garbage Collector. Khi `InstanceLab` bị xóa, nó sẽ bắt tín hiệu và lập tức xóa PVC tương ứng để OpenEBS thu hồi dung lượng LVM, chống thất thoát tài nguyên lưu trữ (Storage Leak).
 * `reconcileServices(ctx, instanceLab, targetNamespace)`:
   * **Nhiệm vụ:** Duyệt mảng `spec.ports` và tạo `corev1.Service` (`ClusterIP`).
 * `reconcileIngress(ctx, instanceLab, clusterLab, targetNamespace, svc)`:
@@ -409,10 +415,11 @@ spec:
 
 Khi khởi tạo một đối tượng `InstanceLab` trong cụm Lab có sẵn, Operator sẽ tự động lắp ráp bộ tứ tài nguyên workload dưới đây:
 
-### 4.2.1. Storage (Ephemeral — không có volume riêng)
-Không dùng PVC hay emptyDir riêng. Disk của container được kiểm soát hoàn toàn qua `resources.limits.ephemeral-storage` trên Pod.
+### 4.2.1. Storage (OpenEBS LVM & Ephemeral)
+Sử dụng công nghệ **OpenEBS LVM LocalPV** kết hợp Ansible tự động tạo Loopback Device (50GB). Quá trình này giúp chia nhỏ ổ đĩa ảo bằng LVM mà không làm ảnh hưởng đến đĩa vật lý của máy chủ.
 
-Khi Pod bị xóa → toàn bộ data (bao gồm Docker images học viên kéo vào) được xóa theo — đúng với tính chất ephemeral của lab session.
+* **`/workspace` (Persistent/LVM):** Operator sẽ tự động tạo một `PersistentVolumeClaim` sử dụng StorageClass `openebs-lvm` với dung lượng đúng bằng `spec.resources.storage.limit`. Ổ đĩa này được mount vào `/workspace` bên trong container.
+* Khi `InstanceLab` bị xóa, logic Finalizer của Operator sẽ tự động gọi lệnh xóa PVC, hoàn trả lại dung lượng về Pool LVM ảo của cụm.
 
 ### 4.2.2. Pod (Máy ảo Docker-in-Docker chạy Sysbox Runtime)
 Cấu hình Pod được Operator lắp ráp với đầy đủ các thuộc tính bảo mật Sysbox, cô lập User-Namespace và chia sẻ thông số từ `lxcfs`:
@@ -454,9 +461,21 @@ spec:
         limits:
           cpu: "1"             # ← spec.resources.cpu.limit
           memory: "1Gi"        # ← spec.resources.memory.limit
-          ephemeral-storage: "20Gi"  # ← spec.resources.ephemeralStorage.limit
-                                      # Bao gồm writable layer + logs + /var/lib/docker
+          ephemeral-storage: "20Gi"  # Giới hạn phân vùng root (OverlayFS)
+      lifecycle:
+        postStart:
+          exec:
+            # TRICK BẢO MẬT: Ẩn thông tin cấu hình phần cứng vật lý của máy chủ khỏi sinh viên!
+            # 1. Che df: Dùng wrapper script ẩn các phân vùng host (overlay) và RAM ảo (tmpfs).
+            # 2. Che lsblk/fdisk: Đè tmpfs trống lên /sys/block và /sys/class/block.
+            command: 
+              - /bin/bash
+              - -c
+              - "echo -e '#!/bin/bash\\n/usr/bin/df \"$@\" | grep -vE \"^overlay|^tmpfs|^shm|^/dev/nvme|^/dev/sda|^/dev/vda\"' > /usr/local/bin/df && chmod +x /usr/local/bin/df && mount -t tmpfs tmpfs /sys/block && mount -t tmpfs tmpfs /sys/class/block"
       volumeMounts:
+        # Mount ổ đĩa LVM OpenEBS an toàn cho workspace sinh viên
+        - name: workspace-volume
+          mountPath: /workspace
         # Mount toàn bộ các điểm báo cáo thông lượng LXCFS từ Host vào /proc
         - name: lxcfs-proc-cpuinfo
           mountPath: /proc/cpuinfo
@@ -469,7 +488,10 @@ spec:
         - name: lxcfs-proc-uptime
           mountPath: /proc/uptime
   volumes:
-    # Không có emptyDir — disk được kiểm soát qua ephemeral-storage limit
+    # Ổ đĩa LVM động cấp phát bởi OpenEBS
+    - name: workspace-volume
+      persistentVolumeClaim:
+        claimName: instancelab-sample-workspace
     - name: lxcfs-proc-cpuinfo
       hostPath:
         path: /var/lib/lxcfs/proc/cpuinfo
