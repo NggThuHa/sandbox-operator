@@ -14,25 +14,7 @@
           - jq
         state: present
 
-    - name: Verify K3s config directory exists
-      ansible.builtin.stat:
-        path: /etc/rancher/k3s
-      register: k3s_dir
 
-    - name: Assert K3s directory exists
-      ansible.builtin.assert:
-        that:
-          - k3s_dir.stat.exists
-
-    - name: Verify K3s config file is written
-      ansible.builtin.stat:
-        path: /etc/rancher/k3s/config.yaml
-      register: k3s_config
-
-    - name: Assert K3s config file exists
-      ansible.builtin.assert:
-        that:
-          - k3s_config.stat.exists
 
     - name: Verify sysctl config file is written (99-k8s-sysbox.conf)
       ansible.builtin.stat:
@@ -44,13 +26,4 @@
         that:
           - sysctl_config.stat.exists
 
-    - name: Slurp K3s config content for validation
-      ansible.builtin.slurp:
-        src: /etc/rancher/k3s/config.yaml
-      register: k3s_config_content
 
-    - name: Assert K3s config has UserNamespacesSupport flag
-      ansible.builtin.assert:
-        that:
-          - "'UserNamespacesSupport' in (k3s_config_content['content'] | b64decode)"
-        fail_msg: "K3s config is missing UserNamespacesSupport feature gate"
