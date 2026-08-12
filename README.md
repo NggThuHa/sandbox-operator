@@ -246,4 +246,3 @@ Bộ điều khiển Operator có khả năng tinh chỉnh linh hoạt lớp lư
 ---
 *Phát triển bởi **Nguyễn Tự Kiên** (2026).*  
 *Licensed under the Apache License, Version 2.0.*
----
