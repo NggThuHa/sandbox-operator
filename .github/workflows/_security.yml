@@ -67,7 +67,7 @@ jobs:
             gate: "off"
     steps:
       - name: Clone the code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -82,7 +82,8 @@ jobs:
 
       - name: Upload SARIF
         if: ${{ inputs.upload-sarif && !cancelled() && github.event.pull_request.head.repo.fork != true }}
-        uses: github/codeql-action/upload-sarif@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3.37.7
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         with:
           sarif_file: trivy-results/${{ matrix.name }}.sarif
           category: trivy-${{ matrix.name }}
@@ -97,7 +98,7 @@ jobs:
       security-events: write
     steps:
       - name: Clone the code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -117,7 +118,8 @@ jobs:
 
       - name: Upload SARIF
         if: ${{ inputs.upload-sarif && !cancelled() && github.event.pull_request.head.repo.fork != true }}
-        uses: github/codeql-action/upload-sarif@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3.37.7
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         with:
           sarif_file: trivy-results/deps-and-secrets.sarif
           category: trivy-deps-and-secrets
@@ -132,17 +134,17 @@ jobs:
       security-events: write
     steps:
       - name: Clone the code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       # Built here rather than reusing a published tag so a pull request is
       # scanned before anything is pushed anywhere.
       - name: Build operator image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           tags: sandbox-operator:ci-scan
@@ -163,7 +165,8 @@ jobs:
 
       - name: Upload SARIF
         if: ${{ inputs.upload-sarif && !cancelled() && github.event.pull_request.head.repo.fork != true }}
-        uses: github/codeql-action/upload-sarif@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3.37.7
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         with:
           sarif_file: trivy-results/image-operator.sarif
           category: trivy-image-operator
