@@ -1,0 +1,21 @@
+# ==============================================================================
+# CLOUD-INIT NETWORK-CONFIG v2 (netplan) - IP TĨNH THEO MAC
+# ==============================================================================
+# Không dùng `set-name` để tránh xung đột khi kernel đã đặt tên interface; chỉ
+# cần `match.macaddress` là netplan gán đúng card mạng do libvirt cấp.
+# ==============================================================================
+version: 2
+ethernets:
+  primary:
+    match:
+      macaddress: "${mac}"
+    dhcp4: false
+    dhcp6: false
+    addresses:
+      - ${ip}/${prefix}
+    routes:
+      - to: default
+        via: ${gateway}
+    nameservers:
+      search: [${domain}]
+      addresses: [${nameservers}]

@@ -9,3 +9,8 @@
 # Re-include Go module files
 !go.mod
 !go.sum
+
+# A local vendor/ directory is never used by the image build (see Dockerfile:
+# modules come from `go mod download`). Excluding it keeps the build context
+# small even when a developer has run `go mod vendor` for offline work.
+vendor/

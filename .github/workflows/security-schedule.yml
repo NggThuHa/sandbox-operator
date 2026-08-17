@@ -1,0 +1,34 @@
+name: Security (scheduled)
+
+# Purpose | Mục đích
+#   EN: Re-run the Trivy suite on a schedule. Nothing in the repo has to change
+#       for the result to change: Trivy's vulnerability database is updated
+#       continuously, so yesterday's clean image can be today's CVE.
+#   VI: Chạy lại bộ Trivy theo lịch. Repo không cần thay đổi gì thì kết quả vẫn
+#       có thể khác: cơ sở dữ liệu lỗ hổng của Trivy được cập nhật liên tục, nên
+#       image "sạch" hôm qua có thể thành CVE hôm nay.
+#
+# The scan definitions live in _security.yml so the scheduled run and the
+# pull-request run cannot drift apart.
+# Định nghĩa các lượt quét nằm ở _security.yml để lần chạy theo lịch và lần chạy
+# trên pull request không bị lệch nhau.
+
+on:
+  schedule:
+    # Mondays at 03:17 UTC. An odd minute keeps it off the top-of-hour spike when
+    # every scheduled workflow on GitHub queues at once.
+    # Thứ Hai 03:17 UTC. Chọn phút lẻ để tránh giờ cao điểm đầu giờ khi mọi
+    # workflow theo lịch trên GitHub cùng vào hàng đợi.
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trivy:
+    name: Trivy
+    uses: ./.github/workflows/_security.yml
+    permissions:
+      contents: read
+      security-events: write

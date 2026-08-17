@@ -1,0 +1,61 @@
+# ==============================================================================
+# VÍ DỤ CẤU HÌNH — copy thành terraform.tfvars rồi sửa theo nhu cầu
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# LỰA CHỌN NỀN TẢNG (xem platform.tf)
+# ------------------------------------------------------------------------------
+cloud_provider = "qemu" # qemu | aws | azure | gcp (hiện chỉ qemu có module)
+k8s_distro     = "k3s"  # k3s | kubeadm
+
+# ------------------------------------------------------------------------------
+# TOPOLOGY — mặc định 1 VM đóng cả vai master + worker
+# ------------------------------------------------------------------------------
+cluster_name     = "kubeclass"
+master_count     = 1
+worker_count     = 0
+master_vcpu      = 4
+master_memory_mb = 6144
+disk_size_gb     = 60
+
+# Thêm worker thì bật hai dòng dưới:
+# worker_count     = 2
+# worker_vcpu      = 2
+# worker_memory_mb = 4096
+
+# ------------------------------------------------------------------------------
+# SSH — để rỗng thì Terraform tự sinh khoá ed25519 vào ./.ssh/
+# ------------------------------------------------------------------------------
+ssh_user = "ubuntu"
+# ssh_public_key       = "ssh-ed25519 AAAA... you@host"
+# ssh_private_key_path = "~/.ssh/id_ed25519"
+
+# ------------------------------------------------------------------------------
+# QEMU / LIBVIRT
+# ------------------------------------------------------------------------------
+libvirt_uri     = "qemu:///system"
+storage_pool    = "default"
+network_cidr    = "192.168.126.0/24"
+os_image_source = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+
+# Đã tải image sẵn thì trỏ vào file cục bộ cho nhanh:
+# os_image_source = "/var/tmp/noble-server-cloudimg-amd64.img"
+
+# Dùng network libvirt có sẵn thay vì tạo mới:
+# create_network        = false
+# existing_network_name = "k3s-net"
+# network_cidr          = "192.168.123.0/24"
+
+# ------------------------------------------------------------------------------
+# ANSIBLE
+# ------------------------------------------------------------------------------
+run_ansible           = true
+k3s_version           = "v1.32.5+k3s1"
+openebs_lvm_pool_size = "20G"
+
+# Dựng cụm nhanh, bỏ Sysbox và OpenEBS:
+# ansible_skip_tags = ["sysbox", "storage"]
+
+# Thêm biến/tham số cho playbook:
+# ansible_extra_vars = { kubeadm_k8s_version = "v1.35.0" }
+# ansible_extra_args = "-vv"

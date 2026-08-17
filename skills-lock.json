@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "kubernetes-skill": {
+      "source": "lukasniessen/kubernetes-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "c87c8d52ad4d08d29d34b2788a2b64b0a367dd71a958e592dc57608934c217db"
+    }
+  }
+}

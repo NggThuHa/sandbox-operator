@@ -1,0 +1,46 @@
+name: Setup Go toolchain
+description: >-
+  Install Go from go.mod and restore the Makefile-managed tool binaries in bin/
+  (controller-gen, kustomize, setup-envtest, the custom golangci-lint build, and
+  the envtest control-plane binaries under bin/k8s).
+
+inputs:
+  cache-tools:
+    description: >-
+      Restore and save bin/. Disable for jobs that need a guaranteed cold
+      toolchain (for example when debugging a tool install).
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    # setup-go caches the module and build caches keyed on go.sum. This matters
+    # more than it used to: vendor/ is no longer tracked, so every job resolves
+    # dependencies from the module cache.
+    - name: Setup Go
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      with:
+        go-version-file: go.mod
+        cache-dependency-path: go.sum
+
+    # The Makefile installs tools as bin/<tool>-<version> with bin/<tool> as a
+    # symlink (see the go-install-tool macro), so the cache key only has to
+    # track the files that pin those versions:
+    #   Makefile        - KUSTOMIZE_VERSION, CONTROLLER_TOOLS_VERSION,
+    #                     GOLANGCI_LINT_VERSION
+    #   go.mod          - ENVTEST_VERSION and ENVTEST_K8S_VERSION are derived
+    #                     from controller-runtime and k8s.io/api
+    #   .custom-gcl.yml - the golangci-lint plugin set; a change here means the
+    #                     custom binary must be rebuilt
+    - name: Cache Makefile-managed tools
+      if: inputs.cache-tools == 'true'
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: bin
+        key: >-
+          ${{ runner.os }}-${{ runner.arch }}-tools-${{
+            hashFiles('Makefile', 'go.mod', '.custom-gcl.yml') }}
+        # No restore-keys on purpose: a partial hit would leave stale binaries
+        # that the Makefile considers up to date, silently linting or generating
+        # with the wrong tool version.

@@ -1,6 +1,8 @@
 # 🚀 KubeClass Sandbox Operator — Cloud-Native Practical Lab & Sandbox Platform
 
-![Kubebuilder](https://img.shields.io/badge/Kubebuilder-v4-blue.svg) ![Kubernetes](https://img.shields.io/badge/Kubernetes-v1.32+-326ce5.svg) ![Go Version](https://img.shields.io/badge/Go-v1.26+-00ADD8.svg) ![Ansible](https://img.shields.io/badge/Ansible-Kubespray%20Style-EE0000.svg)
+[![CI](https://github.com/ngtukien/sandbox-operator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ngtukien/sandbox-operator/actions/workflows/ci.yml) [![Release](https://github.com/ngtukien/sandbox-operator/actions/workflows/release.yml/badge.svg)](https://github.com/ngtukien/sandbox-operator/actions/workflows/release.yml) [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
+
+![Kubebuilder](https://img.shields.io/badge/Kubebuilder-v4-blue.svg) ![Kubernetes](https://img.shields.io/badge/Kubernetes-v1.32+-326ce5.svg) ![Go Version](https://img.shields.io/badge/Go-v1.26+-00ADD8.svg) ![Ansible](https://img.shields.io/badge/Ansible-Kubespray%20Style-EE0000.svg) ![Terraform](https://img.shields.io/badge/Terraform-QEMU%2Flibvirt-844FBA.svg)
 
 **KubeClass Sandbox Operator** là bộ điều khiển Kubernetes (Kubernetes Operator) tiêu chuẩn doanh nghiệp của hệ sinh thái **KubeClass**, chuyên tự động hóa việc khởi tạo và quản trị nền tảng phòng thí nghiệm & Sandbox (Cloud-Native Lab Platform) trên điện toán đám mây, phục vụ tối ưu cho mục đích đào tạo thực thao (University Practical Labs, Coding Bootcamps, DevSecOps Cyber-Range). 
 
@@ -51,17 +53,22 @@ graph TD
 
 Hệ thống được trang bị sẵn bộ engine Ansible tối ưu hóa theo quy chuẩn phong cách **Kubespray**, giúp bạn biến hàng tá máy chủ thô (Bare-metal / VM) thành cụm Lab Kubeadm hoặc K3s chạy Sysbox chỉ trong vài phút!
 
-### Cây Thư Mục Khởi Tạo Cụm (`ansible/`)
+### Cây Thư Mục Khởi Tạo Cụm (`infra/ansible/`)
 ```text
-ansible/
-├── ansible.cfg                    # Cấu hình Ansible tối ưu SSH Pipelining & Callback
-├── cluster.yml                    # 🚀 Playbook hợp nhất toàn cụm (Mặc định: Kubeadm v1.35)
-├── README.md                      # 📜 Tài liệu hướng dẫn chuyên sâu chi tiết cho Ansible
-├── inventory/                     # Kho Phân Cực Môi Trường (Environment Segmentation)
-│   └── lab-cluster/               
-│       ├── hosts.ini              # Danh sách IP máy chủ Master và Workers
-│       └── group_vars/            # Kho cấu hình biến toàn bộ cụm (Kubeadm/K3s version, Sysbox)
-└── roles/                         # Bộ động cơ tự động hóa chuyên sâu (common, containerd, kubeadm-*, k3s-*, sysbox)
+infra/
+├── ansible/                        # 🔧 Khởi tạo cụm trên máy chủ đã có sẵn
+│   ├── ansible.cfg                 # Cấu hình Ansible tối ưu SSH Pipelining & Callback
+│   ├── cluster.yml                 # 🚀 Playbook hợp nhất toàn cụm (Mặc định: Kubeadm v1.35)
+│   ├── README.md                   # 📜 Tài liệu hướng dẫn chuyên sâu chi tiết cho Ansible
+│   ├── requirements-dev.txt        # Bộ công cụ ansible-lint / molecule dùng cho CI & dev
+│   ├── inventory/                  # Kho Phân Cực Môi Trường (Environment Segmentation)
+│   │   └── lab-cluster/
+│   │       ├── hosts.ini           # Danh sách IP máy chủ Master và Workers
+│   │       └── group_vars/         # Kho cấu hình biến toàn bộ cụm (Kubeadm/K3s version, Sysbox)
+│   ├── molecule/                   # Bộ kiểm thử role trong container có systemd
+│   └── roles/                      # Bộ động cơ tự động hóa chuyên sâu (common, containerd, kubeadm-*, k3s-*, sysbox)
+└── terraform/                      # 🖥️ Cấp phát máy ảo QEMU/libvirt trước khi chạy Ansible
+    └── README.md                   # 📜 Hướng dẫn dựng máy ảo lab từ đầu bằng Terraform
 ```
 
 ### Cài Đặt Ansible & Thực Thi Khởi Tạo (Zero-Clone)
@@ -93,10 +100,10 @@ k8s_workers
 EOF
 
 # Bước B: Tự động kéo mã nguồn và cài đặt K3s + Sysbox
-ansible-pull -K -U https://github.com/ngtukien/sandbox-operator.git -i /tmp/hosts.ini ansible/cluster.yml -e kubernetes_distro=k3s
+ansible-pull -K -U https://github.com/ngtukien/sandbox-operator.git -i /tmp/hosts.ini infra/ansible/cluster.yml -e kubernetes_distro=k3s
 
 # Hoặc nếu bạn muốn dùng Kubeadm chuẩn thay vì K3s:
-ansible-pull -K -U https://github.com/ngtukien/sandbox-operator.git -i /tmp/hosts.ini ansible/cluster.yml
+ansible-pull -K -U https://github.com/ngtukien/sandbox-operator.git -i /tmp/hosts.ini infra/ansible/cluster.yml
 
 # Bước C: Cấu hình KUBECONFIG để sử dụng lệnh kubectl
 # Với K3s:
@@ -104,7 +111,7 @@ mkdir -p ~/.kube && sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config && sudo cho
 # Với Kubeadm:
 mkdir -p ~/.kube && sudo cp /etc/kubernetes/admin.conf ~/.kube/config && sudo chown $USER:$USER ~/.kube/config
 ```
-*(Để xem cách cấu hình cho cụm gồm nhiều máy chủ Multi-node, hãy tham khảo [ansible/README.md](ansible/README.md))*
+*(Để xem cách cấu hình cho cụm gồm nhiều máy chủ Multi-node, hãy tham khảo [infra/ansible/README.md](infra/ansible/README.md). Nếu bạn chưa có máy chủ nào, hãy dựng máy ảo trước bằng [infra/terraform/README.md](infra/terraform/README.md).)*
 
 
 ---
@@ -127,7 +134,15 @@ make manifests generate
 
 # Kích hoạt bộ kiểm thử tự động Unit test qua Envtest (Ginkgo/Gomega):
 make test
+
+# Chạy đúng chuỗi mà CI chạy: unit test kèm ngưỡng sàn coverage:
+make test-coverage
+
+# Bộ kiểm thử End-to-End trên cụm Kind dùng một lần (bắt buộc khi sửa Controller):
+make test-e2e
 ```
+
+> 💡 *Muốn biết trước CI sẽ chạy những khu vực nào cho nhánh của bạn? Chạy `hack/ci/detect-changes.sh origin/main`. Chi tiết đối chiếu từng job CI với lệnh tương đương ở máy nằm trong [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md).*
 
 ### 3. Đưa Operator Lên Cụm K3s Thực Chiến
 
@@ -162,7 +177,7 @@ make deploy IMG=$IMG
 ### 1. Khởi tạo một Cụm Phòng Lab (`ClusterLab`) cho Sinh viên
 Tạo file `sample-clusterlab.yaml`:
 ```yaml
-apiVersion: lab.devops.toiyeuptit.com/v1alpha1
+apiVersion: lab.ngtukien.id.vn/v1alpha1
 kind: ClusterLab
 metadata:
   name: student-devops-lab01
@@ -194,7 +209,7 @@ spec:
 ### 2. Khởi tạo Máy Ảo Thực Thao (`InstanceLab`) kèm Terminal Web
 Tạo file `sample-instancelab.yaml`:
 ```yaml
-apiVersion: lab.devops.toiyeuptit.com/v1alpha1
+apiVersion: lab.ngtukien.id.vn/v1alpha1
 kind: InstanceLab
 metadata:
   name: ubuntu-sysbox-devbox
@@ -242,6 +257,19 @@ Bộ điều khiển Operator có khả năng tinh chỉnh linh hoạt lớp lư
   kubectl get clusterlab,instancelab -A -o wide
   ```
 * **Bảo đảm Dọn Sạch Sẽ (Garbage Collection):** Xóa `ClusterLab` gốc sẽ phát đi tín hiệu qua Garbage Collector K8s tự động dọn sạch an toàn toàn bộ Pods, PVCs, NetworkPolicies và Services trong Namespace tương ứng!
+
+---
+
+## 🤝 Tham Gia Phát Triển & Báo Cáo Bảo Mật (Contributing & Security)
+
+| Bạn muốn | Hãy đọc |
+| :--- | :--- |
+| Hiểu sâu kiến trúc CRD & luồng Reconcile | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Mở Pull Request đúng chuẩn CI | [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md) |
+| Báo lỗi hoặc đề xuất tính năng | [Issue templates](.github/ISSUE_TEMPLATE) |
+| Báo lỗ hổng bảo mật (thoát sandbox, truy cập chéo lab) | [.github/SECURITY.md](.github/SECURITY.md) — **không mở issue công khai** |
+
+Toàn bộ Pull Request đều đi qua một check bắt buộc duy nhất là **`CI / All checks passed`**, tổng hợp các job Go (verify / lint / unit test / e2e), Ansible, Terraform, Lab images và Security. CI chỉ chạy những khu vực thực sự bị thay đổi, nên job hiện trạng thái *skipped* là điều bình thường.
 
 ---
 *Phát triển bởi **Nguyễn Tự Kiên** (2026).*  

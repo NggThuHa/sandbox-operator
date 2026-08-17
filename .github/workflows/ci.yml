@@ -1,0 +1,195 @@
+name: CI
+
+# Purpose | Mục đích
+#   EN: The single entry point for pull requests and pushes to main. It decides
+#       which areas changed and then calls the reusable `_*.yml` workflows. Every
+#       job definition lives in exactly one file, and branch protection only has
+#       to require one check: "CI / All checks passed".
+#   VI: Cửa vào duy nhất cho pull request và push lên main. Nó xác định khu vực
+#       nào thay đổi rồi gọi các workflow tái sử dụng `_*.yml`. Mỗi định nghĩa job
+#       chỉ nằm ở một file, và branch protection chỉ cần yêu cầu một check duy
+#       nhất: "CI / All checks passed".
+#
+# Layout | Sơ đồ:
+#   changes ─┬─> go-verify ─┐
+#            ├─> go-lint    │
+#            ├─> go-test    ├─> all-checks-passed
+#            ├─> go-e2e     │
+#            ├─> ansible    │
+#            ├─> terraform  │
+#            └─> images     │
+#                security ──┘
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# One CI run per pull request; superseded runs are cancelled. Pushes to main are
+# never cancelled, because main's history is what release tags are cut from.
+# Mỗi pull request chỉ giữ một lượt CI, lượt cũ bị huỷ. Push lên main không bao
+# giờ bị huỷ, vì lịch sử main là nơi cắt tag phát hành.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      go: ${{ steps.areas.outputs.go }}
+      images: ${{ steps.areas.outputs.images }}
+      ansible: ${{ steps.areas.outputs.ansible }}
+      terraform: ${{ steps.areas.outputs.terraform }}
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # The merge base has to be reachable for the diff below.
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Untrusted values go through env, never straight into the shell.
+      # Giá trị không đáng tin đi qua env, không nội suy thẳng vào shell.
+      - name: Detect changed areas
+        id: areas
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            pull_request) base="$PR_BASE_SHA" ;;
+            push) base="$PUSH_BEFORE_SHA" ;;
+            # workflow_dispatch has no "previous" state: run everything.
+            *) base="" ;;
+          esac
+          hack/ci/detect-changes.sh "$base" | tee -a "$GITHUB_OUTPUT"
+
+  go-verify:
+    name: Go / verify
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    uses: ./.github/workflows/_go-verify.yml
+    permissions:
+      contents: read
+
+  go-lint:
+    name: Go / lint
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    uses: ./.github/workflows/_go-lint.yml
+    permissions:
+      contents: read
+
+  go-test:
+    name: Go / unit tests
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    uses: ./.github/workflows/_go-test.yml
+    permissions:
+      contents: read
+    # 25% is the floor the suite clears today (internal/controller only). Raise
+    # it as coverage grows; see hack/ci/coverage-gate.sh.
+    # 25% là ngưỡng bộ test hiện đạt được (chỉ internal/controller). Hãy nâng dần
+    # khi coverage tăng; xem hack/ci/coverage-gate.sh.
+    with:
+      coverage-min: "25"
+    secrets: inherit
+
+  go-e2e:
+    name: Go / e2e tests
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    uses: ./.github/workflows/_go-e2e.yml
+    permissions:
+      contents: read
+
+  ansible:
+    name: Ansible
+    needs: changes
+    if: needs.changes.outputs.ansible == 'true'
+    uses: ./.github/workflows/_ansible.yml
+    permissions:
+      contents: read
+
+  terraform:
+    name: Terraform
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
+    uses: ./.github/workflows/_terraform.yml
+    permissions:
+      contents: read
+
+  images:
+    name: Lab images
+    needs: changes
+    if: needs.changes.outputs.images == 'true'
+    uses: ./.github/workflows/_images.yml
+    permissions:
+      contents: read
+      # Pushing only happens on main; the permission is scoped to this job either
+      # way. Chỉ push khi ở main; quyền này dù sao cũng bị giới hạn trong job này.
+      packages: write
+      security-events: write
+    with:
+      push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    secrets: inherit
+
+  # Not gated on `changes`: a leaked credential or a new CVE in go.sum is worth
+  # catching on any pull request, including a docs-only one.
+  # Không phụ thuộc `changes`: credential bị lộ hay CVE mới trong go.sum đều đáng
+  # bắt ở mọi pull request, kể cả PR chỉ sửa tài liệu.
+  security:
+    name: Security
+    uses: ./.github/workflows/_security.yml
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      upload-sarif: ${{ github.event.pull_request.head.repo.fork != true }}
+
+  # The one check to require in branch protection. Skipped jobs are fine —
+  # that is change detection working — but a failure or cancellation is not.
+  # Đây là check duy nhất cần đặt trong branch protection. Job bị skip là bình
+  # thường (đúng ý đồ của change detection), còn fail hay cancel thì không.
+  all-checks-passed:
+    name: All checks passed
+    if: always()
+    needs:
+      - changes
+      - go-verify
+      - go-lint
+      - go-test
+      - go-e2e
+      - ansible
+      - terraform
+      - images
+      - security
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify every upstream job succeeded or was skipped
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          echo "$NEEDS_JSON" | jq .
+          if ! echo "$NEEDS_JSON" \
+            | jq -e 'all(.[]; .result == "success" or .result == "skipped")' >/dev/null; then
+            echo "::error::At least one CI job failed or was cancelled."
+            echo "$NEEDS_JSON" \
+              | jq -r 'to_entries[] | select(.value.result != "success" and .value.result != "skipped") | "  - \(.key): \(.value.result)"'
+            exit 1
+          fi
+          echo "All CI jobs succeeded or were skipped."

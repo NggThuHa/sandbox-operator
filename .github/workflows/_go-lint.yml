@@ -1,0 +1,42 @@
+name: Go / lint
+
+# Purpose | Mục đích
+#   EN: golangci-lint (the custom build declared in .custom-gcl.yml) plus a
+#       config sanity check, so an invalid linter config fails loudly instead of
+#       silently disabling rules.
+#   VI: Chạy golangci-lint (bản custom khai báo trong .custom-gcl.yml) kèm bước
+#       kiểm tra cấu hình, để một file cấu hình sai bị báo lỗi rõ ràng thay vì
+#       âm thầm vô hiệu hoá các rule.
+#
+# Reusable: called by ci.yml. Never runs on its own.
+# Tái sử dụng: được ci.yml gọi. Không tự chạy độc lập.
+
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  lint:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      # The composite action restores bin/, which holds the custom golangci-lint
+      # binary. Rebuilding it from source takes minutes; the cache makes lint
+      # one of the cheapest jobs in the matrix.
+      - name: Setup Go toolchain
+        uses: ./.github/actions/setup-go-tools
+
+      - name: Check linter configuration
+        run: make lint-config
+
+      - name: Run linter
+        run: make lint

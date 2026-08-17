@@ -1,0 +1,213 @@
+name: Release
+
+# Purpose | Mục đích
+#   EN: Publish the operator image, the ready-to-apply dist/install.yaml, and the
+#       lab images. Verification runs first: nothing is published from a tree
+#       whose generated code, modules or unit tests are broken, or that fails the
+#       security gate.
+#   VI: Phát hành image của operator, file dist/install.yaml dùng ngay được, và
+#       các lab image. Bước kiểm tra chạy trước: không phát hành từ một cây mã có
+#       code sinh tự động, module hay unit test đang lỗi, hoặc không qua được gate
+#       bảo mật.
+#
+# Triggers | Kích hoạt:
+#   push to main  -> :latest and :<branch> tags, no GitHub Release
+#   push tag v*   -> :<version> tags plus a GitHub Release with install.yaml
+#   push lên main -> tag :latest và :<branch>, không tạo GitHub Release
+#   push tag v*   -> tag :<version> kèm GitHub Release có install.yaml
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  # Serialise releases: two runs pushing the same :latest tag is a race with a
+  # published artifact as the loser.
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Same reusable workflows CI uses, so "green on main" and "safe to release"
+  # mean the same thing. Tag pushes do not trigger ci.yml, which is why these
+  # jobs are repeated here.
+  # Dùng đúng các workflow tái sử dụng của CI, để "xanh trên main" và "an toàn để
+  # phát hành" là cùng một nghĩa. Push tag không kích hoạt ci.yml, nên các job này
+  # được lặp lại ở đây.
+  verify:
+    name: Go / verify
+    uses: ./.github/workflows/_go-verify.yml
+    permissions:
+      contents: read
+
+  test:
+    name: Go / unit tests
+    uses: ./.github/workflows/_go-test.yml
+    permissions:
+      contents: read
+    with:
+      coverage-min: "25"
+    secrets: inherit
+
+  # EN: Yes, this repeats what ci.yml already ran for a main push. It is not
+  #     redundant for a tag: Trivy's vulnerability database moves on its own, so a
+  #     tree that scanned clean when the commit landed can carry a CRITICAL CVE by
+  #     the time the tag is cut. The alternative — publishing on the strength of an
+  #     older scan — is exactly the gap this job closes. The gha build cache makes
+  #     the repeat cheap.
+  # VI: Đúng, job này lặp lại việc ci.yml đã chạy cho push lên main. Nhưng với một
+  #     tag thì không dư: cơ sở dữ liệu lỗ hổng của Trivy tự cập nhật, nên một cây mã
+  #     từng quét sạch lúc commit vào có thể đã mang CVE mức CRITICAL vào thời điểm
+  #     cắt tag. Phương án còn lại — phát hành dựa trên một lượt quét cũ — chính là
+  #     khoảng trống mà job này bịt lại. Cache build gha giúp lần lặp này rẻ.
+  security:
+    name: Security
+    uses: ./.github/workflows/_security.yml
+    permissions:
+      contents: read
+      security-events: write
+
+  operator-image:
+    name: Operator image
+    needs: [verify, test, security]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image-ref.outputs.ref }}
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Build and push operator image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=operator
+          cache-to: type=gha,mode=max,scope=operator
+
+      # The installer has to point at an immutable reference, not at :latest, so
+      # `kubectl apply -f install.yaml` keeps deploying the same bits later.
+      # Installer phải trỏ tới một tham chiếu bất biến, không phải :latest, để lần
+      # sau `kubectl apply -f install.yaml` vẫn triển khai đúng bản đó.
+      - name: Resolve the image reference for the installer
+        id: image-ref
+        env:
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          repo_lower="$(printf '%s' "$REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          if [[ "$REF" == refs/tags/v* ]]; then
+            ref="ghcr.io/${repo_lower}:${REF_NAME}"
+          else
+            ref="ghcr.io/${repo_lower}:latest"
+          fi
+          echo "Installer image: ${ref}"
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+
+  installer:
+    name: install.yaml
+    needs: operator-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      # Provides kustomize and controller-gen from the cached bin/.
+      - name: Setup Go toolchain
+        uses: ./.github/actions/setup-go-tools
+
+      - name: Generate dist/install.yaml
+        env:
+          IMG: ${{ needs.operator-image.outputs.image }}
+        run: make build-installer IMG="$IMG"
+
+      - name: Upload install.yaml
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: install-manifest
+          path: dist/install.yaml
+          if-no-files-found: error
+
+  lab-images:
+    name: Lab images
+    # Gated on `security` as well: the deps-and-secrets scan covers the whole
+    # repository, and a leaked credential is a reason not to publish anything at
+    # all — not just the operator image.
+    # Cũng phụ thuộc `security`: lượt quét deps-and-secrets bao trùm toàn repo, và
+    # một credential bị lộ là lý do để không publish bất cứ thứ gì — không chỉ
+    # riêng image của operator.
+    needs: [verify, test, security]
+    uses: ./.github/workflows/_images.yml
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+    with:
+      push: true
+      # A release must publish every image, not only the ones that changed since
+      # the previous commit — every tag has to exist for every lab image.
+      # Bản phát hành phải publish mọi image, không chỉ những image vừa đổi — mỗi
+      # tag phải tồn tại cho mọi lab image.
+      build-all: true
+    secrets: inherit
+
+  github-release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [installer, lab-images]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Download install.yaml
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: install-manifest
+
+      - name: Publish release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          files: install.yaml
+          generate_release_notes: true

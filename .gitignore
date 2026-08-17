@@ -16,8 +16,34 @@ Dockerfile.cross
 # Go workspace file
 go.work
 
-# Kubernetes Generated files - skip generated files, except for vendored files
-!vendor/**/zz_generated.*
+# Vendored dependencies are not tracked; reproducibility comes from go.sum.
+# Run `go mod vendor` locally if you need an offline build.
+/vendor/
+
+# Terraform: provider binaries and local state must never be committed.
+# .terraform.lock.hcl IS tracked on purpose (pins provider hashes).
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+!*.tfvars.example
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+.terraform.tfstate.lock.info
+
+# Ansible / Molecule
+*.retry
+.molecule/
+
+# Local agent tooling. Skills are pinned in skills-lock.json instead.
+/.agents/
+/.claude/
 
 # editor and IDE paraphernalia
 .idea

@@ -1,0 +1,166 @@
+name: Security / Trivy
+
+# Purpose | Mục đích
+#   EN: One place for every Trivy scan that is not tied to a lab image build:
+#       IaC misconfiguration, dependency CVEs, leaked secrets, and the operator
+#       image itself. Every scan uploads SARIF, so findings land in the
+#       repository's Security tab instead of scrolling past in a log.
+#   VI: Một nơi duy nhất cho mọi lượt quét Trivy không gắn với việc build lab
+#       image: sai cấu hình IaC, CVE của dependency, secret bị lộ, và chính image
+#       của operator. Mỗi lượt quét đều upload SARIF để kết quả nằm ở tab Security
+#       của repo thay vì trôi qua trong log.
+#
+# Gate policy | Chính sách gate:
+#   EN: SARIF always reports everything; the *gate* is deliberately narrower.
+#       Kubernetes manifests, Terraform and the operator Dockerfile fail on
+#       CRITICAL+HIGH — we own those files. Dependencies and secrets fail on
+#       CRITICAL only. The lab Dockerfiles are report-only: they run systemd as
+#       root by design, which trips several Dockerfile checks that cannot be
+#       "fixed" without breaking the product.
+#   VI: SARIF luôn báo cáo mọi thứ; *gate* thì hẹp hơn có chủ ý. Manifest
+#       Kubernetes, Terraform và Dockerfile của operator fail ở CRITICAL+HIGH — đó
+#       là những file ta tự viết. Dependency và secret chỉ fail ở CRITICAL. Các
+#       Dockerfile lab chỉ báo cáo: chúng cố tình chạy systemd bằng root, làm
+#       vướng vài check Dockerfile mà "sửa" là phá tính năng.
+#
+# Reusable: called by ci.yml (pull requests, main) and security-schedule.yml.
+# Tái sử dụng: được ci.yml (pull request, main) và security-schedule.yml gọi.
+
+on:
+  workflow_call:
+    inputs:
+      upload-sarif:
+        description: >-
+          Upload results to code scanning. Turned off automatically for forked
+          pull requests, whose token cannot write security events.
+        type: boolean
+        required: false
+        default: true
+
+permissions: {}
+
+jobs:
+  iac:
+    name: IaC (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: iac-k8s-manifests
+            target: config
+            gate: "on"
+          - name: iac-terraform
+            target: infra/terraform
+            gate: "on"
+          - name: iac-operator-dockerfile
+            target: Dockerfile
+            gate: "on"
+          # Report-only, see the gate policy above.
+          - name: iac-lab-dockerfiles
+            target: images
+            gate: "off"
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Trivy config scan
+        run: |
+          hack/ci/trivy-scan.sh \
+            --type config \
+            --target "${{ matrix.target }}" \
+            --name "${{ matrix.name }}" \
+            --gate "${{ matrix.gate }}" \
+            --severity CRITICAL,HIGH
+
+      - name: Upload SARIF
+        if: ${{ inputs.upload-sarif && !cancelled() && github.event.pull_request.head.repo.fork != true }}
+        uses: github/codeql-action/upload-sarif@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3.37.7
+        with:
+          sarif_file: trivy-results/${{ matrix.name }}.sarif
+          category: trivy-${{ matrix.name }}
+
+  deps:
+    name: Dependencies & secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      # go.sum is the source of truth for the dependency tree now that vendor/ is
+      # untracked, so a filesystem scan sees exactly what the build resolves.
+      # go.sum là nguồn sự thật của cây dependency sau khi bỏ theo dõi vendor/,
+      # nên quét filesystem thấy đúng những gì bản build phân giải ra.
+      - name: Trivy filesystem scan
+        run: |
+          hack/ci/trivy-scan.sh \
+            --type fs \
+            --target . \
+            --name deps-and-secrets \
+            --scanners vuln,secret \
+            --gate on \
+            --severity CRITICAL
+
+      - name: Upload SARIF
+        if: ${{ inputs.upload-sarif && !cancelled() && github.event.pull_request.head.repo.fork != true }}
+        uses: github/codeql-action/upload-sarif@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3.37.7
+        with:
+          sarif_file: trivy-results/deps-and-secrets.sarif
+          category: trivy-deps-and-secrets
+
+  operator-image:
+    name: Operator image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      # Built here rather than reusing a published tag so a pull request is
+      # scanned before anything is pushed anywhere.
+      - name: Build operator image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          tags: sandbox-operator:ci-scan
+          load: true
+          cache-from: type=gha,scope=operator
+          cache-to: type=gha,mode=max,scope=operator
+
+      # The operator runs on distroless/nonroot, so CRITICAL+HIGH here means a
+      # real dependency problem rather than base-image noise.
+      - name: Trivy image scan
+        run: |
+          hack/ci/trivy-scan.sh \
+            --type image \
+            --target sandbox-operator:ci-scan \
+            --name image-operator \
+            --gate on \
+            --severity CRITICAL,HIGH
+
+      - name: Upload SARIF
+        if: ${{ inputs.upload-sarif && !cancelled() && github.event.pull_request.head.repo.fork != true }}
+        uses: github/codeql-action/upload-sarif@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3.37.7
+        with:
+          sarif_file: trivy-results/image-operator.sarif
+          category: trivy-image-operator

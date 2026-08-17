@@ -1,0 +1,80 @@
+name: Dependabot auto-merge
+
+# Purpose | Mục đích
+#   EN: Approve and queue Dependabot pull requests for auto-merge when the update
+#       is low risk. GitHub still holds the merge until the required status check
+#       ("CI / All checks passed") is green, so this only removes the manual click,
+#       not the verification.
+#   VI: Tự approve và đưa pull request của Dependabot vào hàng đợi auto-merge khi
+#       bản cập nhật ít rủi ro. GitHub vẫn giữ lại việc merge cho tới khi status
+#       check bắt buộc ("CI / All checks passed") xanh, nên workflow này chỉ bỏ đi
+#       cú click thủ công, không bỏ đi bước kiểm tra.
+#
+# Prerequisites | Điều kiện tiên quyết:
+#   1. Settings > General > "Allow auto-merge" enabled.
+#   2. A branch protection rule on main requiring "CI / All checks passed".
+#   Without (2) auto-merge lands the pull request as soon as it is created.
+#   Thiếu (2) thì auto-merge sẽ merge ngay khi pull request vừa được tạo.
+#
+# Why pull_request_target | Vì sao dùng pull_request_target:
+#   EN: A workflow triggered by `pull_request` from Dependabot gets a read-only
+#       token, which cannot approve or merge. pull_request_target runs with the
+#       base branch's token instead. That token is powerful, so this workflow
+#       never checks out the pull request's code — it only calls the API.
+#   VI: Workflow chạy bởi `pull_request` từ Dependabot chỉ có token read-only,
+#       không thể approve hay merge. pull_request_target chạy với token của nhánh
+#       gốc. Token đó có nhiều quyền, nên workflow này tuyệt đối không checkout mã
+#       của pull request — nó chỉ gọi API.
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions: {}
+
+jobs:
+  auto-merge:
+    name: Approve & enable auto-merge
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a # v2.5.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Majors are where a dependency changes its mind about an API. Those stay
+      # manual, with a comment saying so instead of silent inaction.
+      # Bản major là nơi dependency thay đổi API. Những PR đó vẫn xử lý tay, kèm
+      # một comment nói rõ thay vì im lặng không làm gì.
+      - name: Comment on major updates
+        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          DEP: ${{ steps.metadata.outputs.dependency-names }}
+        run: |
+          gh pr comment "$PR_URL" --body \
+            "Major update for \`${DEP}\` — auto-merge is disabled for majors. Please review the changelog manually. / Bản cập nhật major cho \`${DEP}\` — auto-merge bị tắt với major. Vui lòng tự đọc changelog trước khi merge."
+
+      - name: Approve
+        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr review --approve "$PR_URL"
+
+      - name: Enable auto-merge
+        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"

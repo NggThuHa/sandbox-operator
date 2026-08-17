@@ -1,0 +1,19 @@
+# Terraform state & plugin
+.terraform/
+.terraform.lock.hcl.bak
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Biến cục bộ của người dùng (giữ lại terraform.tfvars.example)
+*.tfvars
+*.tfvars.json
+!terraform.tfvars.example
+*.auto.tfvars
+
+# Khoá SSH do Terraform tự sinh
+.ssh/
+
+# Plan file
+*.tfplan

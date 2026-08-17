@@ -1,0 +1,33 @@
+# Issue chooser | Bộ chọn loại issue
+#
+# EN: Blank issues are disabled so every report arrives with the fields the
+#     templates ask for (area, version, distro). The links below cover the two
+#     cases that must NOT become a public issue or a bug report.
+# VI: Tắt issue trống để mọi báo cáo đều có sẵn các trường mà template yêu cầu
+#     (khu vực, phiên bản, bản phân phối). Hai link dưới đây dành cho hai trường
+#     hợp KHÔNG nên trở thành issue công khai hoặc báo lỗi.
+#
+# Docs: https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository
+
+blank_issues_enabled: false
+
+contact_links:
+  - name: 🔒 Report a security vulnerability | Báo lỗ hổng bảo mật
+    url: https://github.com/ngtukien/sandbox-operator/security/advisories/new
+    about: >-
+      Sandbox escape, cross-lab access or leaked credentials — report privately,
+      never as a public issue. | Thoát khỏi sandbox, truy cập chéo giữa các lab
+      hay lộ thông tin bí mật — hãy báo riêng, đừng mở issue công khai.
+
+  - name: 📐 Architecture & CRD reference | Kiến trúc & tham chiếu CRD
+    url: https://github.com/ngtukien/sandbox-operator/blob/main/docs/ARCHITECTURE.md
+    about: >-
+      The CRD fields and reconciliation flow are documented here — check before
+      filing a "how do I" issue. | Các trường CRD và luồng reconcile được ghi ở
+      đây — hãy xem trước khi mở issue kiểu "làm thế nào để".
+
+  - name: 🛠️ Contributing guide | Hướng dẫn đóng góp
+    url: https://github.com/ngtukien/sandbox-operator/blob/main/.github/CONTRIBUTING.md
+    about: >-
+      How to run the same checks CI runs, before opening a pull request. | Cách
+      chạy đúng các bước kiểm tra mà CI chạy, trước khi mở pull request.

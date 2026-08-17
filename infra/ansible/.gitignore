@@ -1,0 +1,9 @@
+*.retry
+*.log
+admin.conf
+kubeconfig.yaml
+k3s.yaml
+.molecule/
+
+# Inventory do Terraform sinh (infra/terraform)
+inventory/*/tf-hosts.ini

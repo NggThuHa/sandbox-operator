@@ -1,0 +1,83 @@
+name: ✨ Feature request | Đề xuất tính năng
+description: Suggest a capability the platform should have. | Đề xuất một khả năng mà nền tảng nên có.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the teaching or operations problem first. The best feature
+        requests here read like a classroom or lab story, not like a patch.
+
+        Hãy mô tả vấn đề trong giảng dạy hoặc vận hành trước. Những đề xuất tốt
+        nhất ở đây đọc như một câu chuyện lớp học / phòng lab, chứ không như một
+        bản vá.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area | Khu vực
+      options:
+        - Operator / controller (ClusterLab, InstanceLab)
+        - CRD / API (api/v1alpha1)
+        - Lab images (images/)
+        - Cluster bootstrap — Ansible (infra/ansible)
+        - VM provisioning — Terraform (infra/terraform)
+        - CI / release pipeline (.github)
+        - Docs (README, docs/)
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem | Vấn đề
+      description: >-
+        Who is blocked, and by what? Concrete beats abstract.
+        Ai đang bị chặn, và bởi cái gì? Cụ thể hơn trừu tượng.
+      placeholder: |
+        A lecturer needs 40 lab VMs to expire at the end of a session, but the
+        TTL only applies to the whole ClusterLab.
+        Một giảng viên cần 40 máy lab tự hết hạn khi kết thúc buổi học, nhưng TTL
+        hiện chỉ áp cho cả ClusterLab.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution | Giải pháp đề xuất
+      description: >-
+        If this changes the CRD, sketch the YAML you would like to write.
+        Nếu điều này thay đổi CRD, hãy phác thảo đoạn YAML bạn muốn viết.
+      value: |
+        ```yaml
+        # The YAML you wish worked | Đoạn YAML bạn mong nó chạy được
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered | Các phương án đã cân nhắc
+      description: >-
+        Including "do nothing" — say what today's workaround costs.
+        Kể cả "không làm gì" — hãy nói cách lách hiện tại tốn kém ra sao.
+
+  - type: checkboxes
+    id: breaking
+    attributes:
+      label: Compatibility | Tương thích
+      options:
+        - label: This would change the CRD schema (api/v1alpha1). | Việc này sẽ thay đổi schema CRD (api/v1alpha1).
+        - label: This would change the default behaviour of existing labs. | Việc này sẽ thay đổi hành vi mặc định của các lab đang chạy.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting | Trước khi gửi
+      options:
+        - label: I searched existing issues and the roadmap in the README. | Tôi đã tìm trong các issue hiện có và roadmap ở README.
+          required: true

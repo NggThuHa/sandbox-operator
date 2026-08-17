@@ -1,0 +1,133 @@
+name: 🐞 Bug report | Báo lỗi
+description: Something in the operator, the lab images or the cluster bootstrap does not work. | Có thứ gì trong operator, lab image hoặc phần khởi tạo cụm không hoạt động.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file this. Please fill in what you can —
+        an incomplete report is still much better than none.
+
+        Cảm ơn bạn đã bỏ thời gian báo lỗi. Hãy điền những gì bạn biết — một báo
+        cáo chưa đầy đủ vẫn tốt hơn nhiều so với không có.
+
+        ⚠️ **Do not paste kubeconfigs, tokens or private IPs.** Redact them first.
+        ⚠️ **Không dán kubeconfig, token hay IP nội bộ.** Hãy che chúng trước.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area | Khu vực
+      description: Which part is broken? | Phần nào đang lỗi?
+      options:
+        - Operator / controller (ClusterLab, InstanceLab)
+        - CRD / API (api/v1alpha1)
+        - Lab images (images/)
+        - Cluster bootstrap — Ansible (infra/ansible)
+        - VM provisioning — Terraform (infra/terraform)
+        - CI / release pipeline (.github)
+        - Docs (README, docs/)
+        - Not sure | Không rõ
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened | Chuyện gì đã xảy ra
+      description: >-
+        The behaviour you saw, including the exact error message.
+        Hành vi bạn quan sát được, kèm nguyên văn thông báo lỗi.
+      placeholder: |
+        InstanceLab stays in Pending; the pod never starts.
+        InstanceLab đứng ở trạng thái Pending; pod không bao giờ chạy.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected | Điều bạn mong đợi
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce | Cách tái hiện
+      description: >-
+        Include the CR you applied — that is usually enough to reproduce.
+        Kèm theo CR bạn đã apply — thường chỉ vậy là đủ để tái hiện.
+      value: |
+        1. `kubectl apply -f` the following:
+
+        ```yaml
+        apiVersion: lab.ngtukien.id.vn/v1alpha1
+        kind: InstanceLab
+        metadata:
+          name: example
+        spec:
+          # ...
+        ```
+
+        2. `kubectl get instancelab example -o yaml`
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Controller logs | Log của controller
+      description: >-
+        `kubectl logs -n kubebuilder-system deploy/kubebuilder-controller-manager -c manager --tail=200`
+      render: shell
+
+  - type: input
+    id: operator-version
+    attributes:
+      label: Operator version | Phiên bản operator
+      description: Image tag or commit SHA. | Tag image hoặc commit SHA.
+      placeholder: "ghcr.io/ngtukien/sandbox-operator:v1.0.0 / commit abc1234"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: distro
+    attributes:
+      label: Kubernetes distribution | Bản phân phối Kubernetes
+      options:
+        - k3s
+        - kubeadm
+        - Kind (local / e2e)
+        - Other | Khác
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment | Môi trường
+      description: >-
+        Kubernetes version, host OS, Sysbox version, storage class.
+        Phiên bản Kubernetes, OS máy chủ, phiên bản Sysbox, storage class.
+      value: |
+        - `kubectl version --short`:
+        - Host OS | OS máy chủ:
+        - Sysbox (`sysbox-runc --version`):
+        - StorageClass:
+        - RuntimeClass:
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting | Trước khi gửi
+      options:
+        - label: I searched existing issues. | Tôi đã tìm trong các issue hiện có.
+          required: true
+        - label: I redacted secrets from the logs and YAML above. | Tôi đã che các thông tin bí mật trong log và YAML ở trên.
+          required: true

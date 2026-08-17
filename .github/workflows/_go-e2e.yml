@@ -1,0 +1,59 @@
+name: Go / e2e tests
+
+# Purpose | Mục đích
+#   EN: Run the Ginkgo e2e suite against a throwaway Kind cluster, the way the
+#       Makefile does locally. Kind is installed here because `make
+#       setup-test-e2e` deliberately refuses to install it for you.
+#   VI: Chạy bộ e2e (Ginkgo) trên một cụm Kind dùng một lần, giống như Makefile
+#       chạy ở máy cá nhân. Kind được cài ở đây vì `make setup-test-e2e` cố ý
+#       không tự cài hộ.
+#
+# Reusable: called by ci.yml. Never runs on its own.
+# Tái sử dụng: được ci.yml gọi. Không tự chạy độc lập.
+
+on:
+  workflow_call:
+    inputs:
+      kind-version:
+        description: >-
+          Kind release to install, e.g. v0.31.0. "latest" tracks the newest
+          release, which is what the upstream kubebuilder scaffold does.
+        type: string
+        required: false
+        default: latest
+
+permissions: {}
+
+jobs:
+  e2e:
+    name: Kind cluster
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Go toolchain
+        uses: ./.github/actions/setup-go-tools
+
+      - name: Install kind
+        env:
+          KIND_VERSION: ${{ inputs.kind-version }}
+        run: |
+          set -euo pipefail
+          arch="$(go env GOARCH)"
+          url="https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-${arch}"
+          echo "Downloading ${url}"
+          curl -fsSLo ./kind "$url"
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+          kind version
+
+      # `make test-e2e` creates the cluster, runs the suite and tears the
+      # cluster down again, so there is nothing to clean up afterwards.
+      - name: Run e2e tests
+        run: make test-e2e

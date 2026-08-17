@@ -1,0 +1,130 @@
+# Dependabot configuration | Cấu hình Dependabot
+#
+# EN: Everything this repo depends on is versioned in a file Dependabot can read,
+#     except two things noted below. Updates are grouped so a routine week is one
+#     or two pull requests instead of fifteen.
+# VI: Mọi thứ repo này phụ thuộc đều được ghi phiên bản trong file Dependabot đọc
+#     được, trừ hai ngoại lệ ghi bên dưới. Các bản cập nhật được gom nhóm để một
+#     tuần bình thường chỉ có một, hai pull request thay vì mười lăm.
+#
+# Not covered | Không được bao phủ:
+#   - infra/ansible/requirements-dev.txt is intentionally unpinned (see the file),
+#     so there is no version for Dependabot to bump.
+#   - Tool versions in the Makefile (kustomize, controller-gen, golangci-lint) and
+#     TRIVY_VERSION are plain make variables. Bump them by hand; `make lint` and
+#     the verify job will tell you immediately if a bump breaks something.
+#   - infra/ansible/requirements-dev.txt cố ý không ghim phiên bản (xem file đó),
+#     nên Dependabot không có version nào để nâng.
+#   - Phiên bản công cụ trong Makefile (kustomize, controller-gen, golangci-lint)
+#     và TRIVY_VERSION là biến make thuần. Nâng tay; `make lint` và job verify sẽ
+#     báo ngay nếu bản mới làm vỡ thứ gì.
+
+version: 2
+
+updates:
+  # ---------------------------------------------------------------------------
+  # Go modules
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Asia/Ho_Chi_Minh
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - go
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # The k8s.io/* and sigs.k8s.io/* modules are released in lockstep. Updating
+      # one without the others produces a build that does not compile, so they
+      # travel together.
+      # Các module k8s.io/* và sigs.k8s.io/* phát hành đồng bộ. Nâng một cái mà
+      # không nâng phần còn lại sẽ tạo ra bản build không compile được, nên chúng
+      # đi cùng nhau.
+      kubernetes:
+        patterns:
+          - "k8s.io/*"
+          - "sigs.k8s.io/*"
+      go-minor-and-patch:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "k8s.io/*"
+          - "sigs.k8s.io/*"
+        update-types:
+          - minor
+          - patch
+
+  # ---------------------------------------------------------------------------
+  # GitHub Actions used by .github/workflows/*
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:15"
+      timezone: Asia/Ho_Chi_Minh
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # ---------------------------------------------------------------------------
+  # Base images: the operator Dockerfile and the lab images
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: docker
+    directories:
+      - /
+      - /images
+    schedule:
+      interval: weekly
+      day: tuesday
+      time: "04:00"
+      timezone: Asia/Ho_Chi_Minh
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - images
+    commit-message:
+      prefix: "chore(images)"
+
+  # ---------------------------------------------------------------------------
+  # Terraform providers (constraints in versions.tf + .terraform.lock.hcl)
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: terraform
+    directories:
+      - /infra/terraform
+      - /infra/terraform/modules/qemu
+    schedule:
+      interval: weekly
+      day: tuesday
+      time: "04:15"
+      timezone: Asia/Ho_Chi_Minh
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - infra
+    commit-message:
+      prefix: "chore(infra)"
+    # dmacvicar/libvirt 0.9.x rewrote the provider schema and is not compatible
+    # with infra/terraform/modules/qemu. versions.tf pins ~> 0.8.3; this ignore
+    # stops Dependabot from re-proposing the same breaking major every week.
+    # dmacvicar/libvirt 0.9.x đã viết lại schema provider và không tương thích với
+    # infra/terraform/modules/qemu. versions.tf ghim ~> 0.8.3; mục ignore này để
+    # Dependabot không đề xuất lại bản major gây vỡ mỗi tuần.
+    ignore:
+      - dependency-name: dmacvicar/libvirt
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-major

@@ -1,0 +1,73 @@
+name: Go / unit tests
+
+# Purpose | Mục đích
+#   EN: Run the envtest-backed unit suite, enforce a coverage floor, and publish
+#       the profile to Codecov. The floor is checked by hack/ci/coverage-gate.sh
+#       so it can be reproduced locally with `make coverage-gate`.
+#   VI: Chạy bộ unit test dựa trên envtest, áp ngưỡng sàn coverage và đẩy profile
+#       lên Codecov. Ngưỡng được kiểm tra bởi hack/ci/coverage-gate.sh nên có thể
+#       tái hiện ở máy cá nhân bằng `make coverage-gate`.
+#
+# Reusable: called by ci.yml. Never runs on its own.
+# Tái sử dụng: được ci.yml gọi. Không tự chạy độc lập.
+
+on:
+  workflow_call:
+    inputs:
+      coverage-min:
+        description: >-
+          Minimum total statement coverage, in percent. Set to the value the
+          suite actually reaches today; raise it as tests are added, never lower
+          it without a note in the pull request.
+        type: string
+        required: false
+        default: "25"
+    secrets:
+      CODECOV_TOKEN:
+        description: >-
+          Optional. Public repositories can upload tokenless, but a repository
+          token makes uploads reliable when the OIDC handshake fails.
+        required: false
+
+permissions: {}
+
+jobs:
+  test:
+    name: envtest & coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      # Restores bin/k8s/<version> too, so setup-envtest does not re-download
+      # the kube-apiserver/etcd control-plane binaries on every run.
+      - name: Setup Go toolchain
+        uses: ./.github/actions/setup-go-tools
+
+      # No `go mod tidy` here on purpose: _go-verify.yml fails the build when
+      # go.mod is untidy instead of repairing it behind the contributor's back.
+      - name: Run unit tests
+        run: make test
+
+      - name: Enforce coverage floor
+        env:
+          COVERAGE_MIN: ${{ inputs.coverage-min }}
+        run: hack/ci/coverage-gate.sh cover.out
+
+      # Runs even when the gate failed: seeing the delta in the Codecov comment
+      # is exactly what a contributor needs to fix a coverage regression.
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
+        with:
+          files: cover.out
+          flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # A flaky uploader must not turn a green test run red; the local gate
+          # above is the authoritative check.
+          fail_ci_if_error: false

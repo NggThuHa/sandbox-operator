@@ -1,0 +1,60 @@
+# Codecov configuration | Cấu hình Codecov
+#
+# EN: Codecov's job here is the *relative* signal — did this pull request make
+#     coverage worse? The absolute floor is enforced by hack/ci/coverage-gate.sh
+#     inside the test job, which works without any third-party service and can be
+#     reproduced with `make coverage-gate`.
+# VI: Việc của Codecov ở đây là tín hiệu *tương đối* — pull request này có làm
+#     coverage tệ đi không? Ngưỡng sàn tuyệt đối do hack/ci/coverage-gate.sh trong
+#     job test đảm nhiệm, chạy được mà không cần dịch vụ bên thứ ba và tái hiện
+#     được bằng `make coverage-gate`.
+#
+# Docs: https://docs.codecov.com/docs/codecovyml-reference
+
+coverage:
+  precision: 1
+  round: down
+  range: "25...80"
+
+  status:
+    # target: auto compares against the base commit, so no number has to be kept
+    # up to date by hand. 1% of slack absorbs the noise from envtest timing
+    # affecting which branches run.
+    # target: auto so với commit gốc, nên không phải bảo trì con số nào bằng tay.
+    # Biên 1% để hấp thụ nhiễu do thời điểm chạy envtest ảnh hưởng nhánh nào được
+    # thực thi.
+    project:
+      default:
+        target: auto
+        threshold: 1%
+        if_ci_failed: error
+
+    # Coverage of the lines this pull request touched. Informational while the
+    # suite is still young: it reports in the comment but does not block.
+    # Coverage của các dòng mà pull request này chạm vào. Đang ở chế độ thông tin
+    # khi bộ test còn non: chỉ báo trong comment, không chặn merge.
+    patch:
+      default:
+        target: 70%
+        threshold: 0%
+        informational: true
+
+comment:
+  layout: "condensed_header, diff, flags, components, condensed_files"
+  behavior: default
+  # No comment on pull requests that do not change coverage.
+  require_changes: true
+
+github_checks:
+  annotations: true
+
+# Generated and test-only code would otherwise dominate the percentage without
+# telling anyone anything about the operator's behaviour.
+# Mã sinh tự động và mã chỉ dùng cho test nếu tính vào sẽ chi phối con số phần trăm
+# mà không nói lên điều gì về hành vi của operator.
+ignore:
+  - "api/**/zz_generated.*.go"
+  - "cmd/main.go"
+  - "test/**"
+  - "hack/**"
+  - "vendor/**"

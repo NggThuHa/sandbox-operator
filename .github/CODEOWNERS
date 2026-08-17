@@ -1,0 +1,27 @@
+# Code owners | Chủ sở hữu mã nguồn
+#
+# EN: Every path here gets @ngtukien requested for review automatically. The
+#     entries are ordered general -> specific; the last matching pattern wins.
+# VI: Mọi đường dẫn ở đây sẽ tự động yêu cầu @ngtukien review. Các mục được xếp từ
+#     tổng quát -> cụ thể; mẫu khớp cuối cùng sẽ thắng.
+#
+# Docs: https://docs.github.com/en/repositories/managing-your-repositories-settings-and-features/customizing-your-repository/about-code-owners
+
+*                       @ngtukien
+
+# CRDs and controllers: the API surface users write YAML against.
+# CRD và controller: bề mặt API mà người dùng viết YAML để dùng.
+/api/                   @ngtukien
+/internal/controller/   @ngtukien
+
+# Anything that changes how code is built, verified or published.
+# Mọi thứ ảnh hưởng cách mã được build, kiểm tra hoặc phát hành.
+/.github/               @ngtukien
+/hack/                  @ngtukien
+/Makefile               @ngtukien
+/Dockerfile             @ngtukien
+
+# Cluster bootstrap and VM provisioning.
+# Khởi tạo cụm và cấp phát máy ảo.
+/infra/                 @ngtukien
+/images/                @ngtukien

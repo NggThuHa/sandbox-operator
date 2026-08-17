@@ -1,0 +1,250 @@
+name: Images / lab images
+
+# Purpose | Mục đích
+#   EN: Build the Sysbox lab images under images/, scan them with Trivy, and push
+#       only what passed. The set of images to rebuild is computed by
+#       hack/ci/detect-changed-images.sh so a one-line change to a single
+#       Dockerfile does not rebuild all of them.
+#   VI: Build các lab image Sysbox trong images/, quét bằng Trivy, và chỉ push
+#       những image đã qua kiểm tra. Danh sách image cần build do
+#       hack/ci/detect-changed-images.sh tính, nên sửa một dòng trong một
+#       Dockerfile sẽ không build lại toàn bộ.
+#
+# Order matters | Thứ tự quan trọng:
+#   EN: build --load -> scan -> push. Building into the local daemon first means
+#       an image is scanned before it can ever reach the registry.
+#   VI: build --load -> quét -> push. Build vào daemon cục bộ trước nghĩa là
+#       image luôn được quét trước khi có thể lên registry.
+#
+# Reusable: called by ci.yml (pull requests, main) and release.yml (tags).
+# Tái sử dụng: được ci.yml (pull request, main) và release.yml (tag) gọi.
+
+on:
+  workflow_call:
+    inputs:
+      push:
+        description: Push the built images to the registry.
+        type: boolean
+        required: false
+        default: false
+      build-all:
+        description: >-
+          Ignore change detection and rebuild every image. Used by releases,
+          where every published tag must exist for every image.
+        type: boolean
+        required: false
+        default: false
+      scan:
+        description: Run the Trivy image scan and upload SARIF.
+        type: boolean
+        required: false
+        default: true
+      gate-severity:
+        description: >-
+          Severities that fail the job, e.g. "CRITICAL". Empty means report-only.
+          Default is report-only on purpose: the lab images are built on
+          systemd/Sysbox base images whose OS CVE backlog is outside this repo's
+          control, and findings are still filed in the Security tab.
+          Mặc định chỉ báo cáo: lab image dựa trên base image systemd/Sysbox có
+          tồn đọng CVE hệ điều hành ngoài tầm kiểm soát của repo này, và kết quả
+          vẫn được đưa vào tab Security.
+        type: string
+        required: false
+        default: ""
+    secrets:
+      DOCKERHUB_USERNAME:
+        description: Optional, used only to avoid Docker Hub's anonymous pull limit.
+        required: false
+      DOCKERHUB_TOKEN:
+        description: Optional, see DOCKERHUB_USERNAME.
+        required: false
+
+permissions: {}
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  detect:
+    name: Detect changed images
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # Change detection needs the base commit, so the shallow default will
+          # not do.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Compute image matrix
+        id: detect
+        env:
+          BUILD_ALL: ${{ inputs.build-all }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ "$BUILD_ALL" = "true" ]; then
+            compare_ref=""
+          else
+            case "$EVENT_NAME" in
+              pull_request) compare_ref="$PR_BASE_SHA" ;;
+              push) compare_ref="$PUSH_BEFORE_SHA" ;;
+              # workflow_dispatch / schedule / tags: no meaningful "previous"
+              # state, so rebuild everything.
+              *) compare_ref="" ;;
+            esac
+          fi
+          matrix="$(hack/ci/detect-changed-images.sh "$compare_ref")"
+          echo "Matrix: ${matrix}"
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: ${{ matrix.image }}
+    needs: detect
+    if: needs.detect.outputs.matrix != '[]' && needs.detect.outputs.matrix != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      # Only needed when inputs.push is true; requesting it unconditionally is
+      # still scoped to this job.
+      packages: write
+      # For the Trivy SARIF upload.
+      security-events: write
+    strategy:
+      # One broken image should not hide the state of the others.
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      # Authenticated pulls avoid Docker Hub's anonymous rate limit, which the
+      # systemd base images hit on busy days. Optional: skipped when the secrets
+      # are not configured.
+      - name: Log in to Docker Hub (optional)
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DOCKERHUB_USERNAME}" ] && [ -n "${DOCKERHUB_TOKEN}" ]; then
+            printf '%s' "${DOCKERHUB_TOKEN}" \
+              | docker login docker.io -u "${DOCKERHUB_USERNAME}" --password-stdin
+          else
+            echo "Docker Hub credentials not configured; using anonymous pulls."
+          fi
+
+      - name: Log in to GHCR
+        if: inputs.push
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          printf '%s' "${GHCR_TOKEN}" \
+            | docker login "${REGISTRY}" -u "${GHCR_USER}" --password-stdin
+
+      - name: Resolve image tags
+        id: tags
+        env:
+          IMAGE: ${{ matrix.image }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          repo_lower="$(printf '%s' "$REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          image_lower="$(printf '%s' "$IMAGE" | tr '[:upper:]' '[:lower:]')"
+          base="${REGISTRY}/${repo_lower}/${image_lower}"
+          short_sha="$(git rev-parse --short HEAD)"
+
+          # The sha tag is the one used for scanning and for anything that needs
+          # to reference this exact build.
+          primary="${base}:${short_sha}"
+          tags="${primary}"$'\n'"${base}:latest"
+          if [[ "$REF" == refs/tags/* ]]; then
+            tags="${tags}"$'\n'"${base}:${REF_NAME}"
+          fi
+
+          {
+            echo "primary=${primary}"
+            echo "tags<<EOF"
+            printf '%s\n' "$tags"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build image
+        # build-push-action rather than a raw `docker buildx build`: the GitHub
+        # Actions cache backend needs the runtime token/URL that only a JS action
+        # can export into the step environment. A bash `--cache-to type=gha`
+        # silently degrades to "no cache".
+        #
+        # Dùng build-push-action thay vì `docker buildx build` thuần: backend cache
+        # của GitHub Actions cần runtime token/URL mà chỉ action JS mới export được
+        # vào môi trường step. Nếu gọi bash với `--cache-to type=gha`, cache sẽ âm
+        # thầm bị bỏ qua.
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: ./images
+          file: ./images/Dockerfile.${{ matrix.image }}
+          tags: ${{ steps.tags.outputs.tags }}
+          # --load equivalent: keep the result in the local daemon so the scan
+          # below runs against the exact bytes that would be pushed.
+          load: true
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+      - name: Scan image with Trivy
+        if: inputs.scan
+        env:
+          IMAGE: ${{ matrix.image }}
+          PRIMARY_TAG: ${{ steps.tags.outputs.primary }}
+          GATE_SEVERITY: ${{ inputs.gate-severity }}
+        run: |
+          set -euo pipefail
+          args=(--type image --target "$PRIMARY_TAG" --name "image-${IMAGE}")
+          if [ -n "$GATE_SEVERITY" ]; then
+            args+=(--gate on --severity "$GATE_SEVERITY")
+          else
+            args+=(--gate off)
+          fi
+          hack/ci/trivy-scan.sh "${args[@]}"
+
+      # Forked pull requests get a read-only token, so the upload would fail with
+      # a confusing 403. The scan output still shows up in the job summary.
+      # PR từ fork chỉ có token read-only nên bước upload sẽ lỗi 403; kết quả quét
+      # vẫn hiện trong job summary.
+      - name: Upload Trivy SARIF
+        if: ${{ inputs.scan && !cancelled() && github.event.pull_request.head.repo.fork != true }}
+        uses: github/codeql-action/upload-sarif@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3.37.7
+        with:
+          sarif_file: trivy-results/image-${{ matrix.image }}.sarif
+          category: trivy-image-${{ matrix.image }}
+
+      # Reached only when the scan step did not fail the job.
+      - name: Push image
+        if: inputs.push
+        env:
+          TAGS: ${{ steps.tags.outputs.tags }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r tag; do
+            [ -z "$tag" ] && continue
+            echo "Pushing ${tag}"
+            docker push "$tag"
+          done <<< "$TAGS"

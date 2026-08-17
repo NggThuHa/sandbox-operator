@@ -1,0 +1,22 @@
+# Ansible tooling used by CI and by contributors | Bộ công cụ Ansible dùng cho CI
+# và cho người phát triển.
+#
+# EN: Versions are intentionally unpinned. This repo lints and syntax-checks
+#     playbooks against the current release train, which is what an operator
+#     running `ansible-pull` from a fresh machine will have. Pin a version here
+#     the day a new ansible-lint release breaks the build for a reason we choose
+#     to defer.
+# VI: Cố ý không ghim phiên bản. Repo lint và kiểm tra cú pháp playbook trên
+#     nhánh phát hành hiện hành — đúng những gì người vận hành có khi chạy
+#     `ansible-pull` từ một máy mới. Chỉ ghim phiên bản ở đây khi một bản
+#     ansible-lint mới làm vỡ build mà ta chủ động hoãn xử lý.
+#
+# Install | Cài đặt:
+#   python3 -m venv .venv && . .venv/bin/activate
+#   pip install -r infra/ansible/requirements-dev.txt
+
+ansible
+ansible-lint
+molecule
+molecule-plugins[docker]
+docker

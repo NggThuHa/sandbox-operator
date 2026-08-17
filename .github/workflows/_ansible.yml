@@ -1,0 +1,100 @@
+name: Ansible / lint & molecule
+
+# Purpose | Mục đích
+#   EN: Syntax-check the cluster playbook in both distro modes (kubeadm and
+#       k3s), run ansible-lint, then converge the roles inside a systemd-enabled
+#       container via Molecule. This is the closest thing to a real bare-metal
+#       run that fits in a CI job.
+#   VI: Kiểm tra cú pháp playbook cụm ở cả hai chế độ distro (kubeadm và k3s),
+#       chạy ansible-lint, rồi converge các role trong container có systemd qua
+#       Molecule. Đây là mức gần nhất với một lần chạy bare-metal thật mà một job
+#       CI có thể làm được.
+#
+# Reusable: called by ci.yml. Never runs on its own.
+# Tái sử dụng: được ci.yml gọi. Không tự chạy độc lập.
+
+on:
+  workflow_call:
+
+permissions: {}
+
+env:
+  # Everything below lives in infra/ansible; keeping the path in one place means
+  # a future move only touches this line.
+  ANSIBLE_DIR: infra/ansible
+
+jobs:
+  ansible:
+    name: lint & molecule
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      # No actions/setup-python step: the runner image already ships a supported
+      # Python 3, and the collections we use are version-agnostic. One less
+      # third-party action in the supply chain.
+      # Không dùng actions/setup-python: image runner đã có Python 3 phù hợp, và
+      # các collection dùng ở đây không phụ thuộc phiên bản. Bớt một action của
+      # bên thứ ba trong chuỗi cung ứng.
+      - name: Cache pip downloads
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/pip
+          key: >-
+            ${{ runner.os }}-pip-ansible-${{
+              hashFiles('infra/ansible/requirements-dev.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-ansible-
+
+      - name: Install Ansible tooling
+        run: |
+          set -euo pipefail
+          python3 -m venv "${RUNNER_TEMP}/ansible-venv"
+          # Export the venv for every later step instead of re-activating it.
+          echo "${RUNNER_TEMP}/ansible-venv/bin" >> "$GITHUB_PATH"
+          "${RUNNER_TEMP}/ansible-venv/bin/pip" install --upgrade pip
+          "${RUNNER_TEMP}/ansible-venv/bin/pip" install \
+            -r "${ANSIBLE_DIR}/requirements-dev.txt"
+
+      - name: Show tool versions
+        run: |
+          ansible --version
+          ansible-lint --version
+          molecule --version
+
+      # Both distro paths are checked because kubernetes_distro switches whole
+      # role sets on and off; a syntax error in the k3s branch would otherwise
+      # only surface on a real cluster.
+      - name: Syntax check (kubeadm, default)
+        working-directory: ${{ env.ANSIBLE_DIR }}
+        run: |
+          ansible-playbook cluster.yml \
+            -i "localhost," \
+            -e "ansible_connection=local" \
+            --syntax-check
+
+      - name: Syntax check (k3s)
+        working-directory: ${{ env.ANSIBLE_DIR }}
+        run: |
+          ansible-playbook cluster.yml \
+            -i "localhost," \
+            -e "ansible_connection=local" \
+            -e "kubernetes_distro=k3s" \
+            --syntax-check
+
+      - name: Run ansible-lint
+        working-directory: ${{ env.ANSIBLE_DIR }}
+        run: ansible-lint cluster.yml
+
+      - name: Run Molecule (default scenario)
+        working-directory: ${{ env.ANSIBLE_DIR }}
+        env:
+          # Molecule's docker driver talks to the runner's own daemon.
+          DOCKER_HOST: unix:///var/run/docker.sock
+        run: molecule test -s default

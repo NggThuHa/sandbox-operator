@@ -1,0 +1,30 @@
+# ==============================================================================
+# INVENTORY ANSIBLE SINH TỰ ĐỘNG TỪ TERRAFORM
+# ==============================================================================
+# CẢNH BÁO: file này do Terraform tạo, mọi thay đổi tay sẽ bị ghi đè.
+#   cloud_provider = ${cloud_provider}
+#   k8s_distro     = ${k8s_distro}
+# ==============================================================================
+
+[k8s_master]
+%{ for name, node in masters ~}
+${name} ansible_host=${node.ip}
+%{ endfor ~}
+
+[k8s_workers]
+%{ for name, node in workers ~}
+${name} ansible_host=${node.ip}
+%{ endfor ~}
+
+# Nhóm tổng hợp toàn cụm (tương thích cách viết của Kubespray).
+[k8s_cluster:children]
+k8s_master
+k8s_workers
+
+[k8s_cluster:vars]
+ansible_user=${ssh_user}
+%{ if ssh_private_key_path != "" ~}
+ansible_ssh_private_key_file=${ssh_private_key_path}
+%{ endif ~}
+ansible_python_interpreter=/usr/bin/python3
+ansible_ssh_common_args=-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null

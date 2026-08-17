@@ -1,0 +1,82 @@
+name: Go / verify
+
+# Guards the invariants that `make test` silently papers over today:
+#   1. generated code (deepcopy, CRDs, RBAC) is committed and up to date
+#   2. go.mod / go.sum are tidy
+#   3. the module graph matches go.sum
+#
+# The old test.yml and test-e2e.yml ran `go mod tidy` (and `go mod vendor`)
+# *before* testing, which repaired a dirty go.mod on the runner instead of
+# failing the build. This job fails instead.
+
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  verify:
+    name: Generated code & modules
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Go toolchain
+        uses: ./.github/actions/setup-go-tools
+
+      # `make generate` stamps the boilerplate with YEAR=$(date +%Y), so running
+      # it in a later calendar year rewrites every "Copyright <year>." header and
+      # would fail this job with no source change at all. Pin YEAR to whatever
+      # the committed files already declare; real drift (a changed API struct
+      # that was never regenerated) is still caught.
+      - name: Verify generated code is up to date
+        run: |
+          set -euo pipefail
+          year="$(sed -n 's|^Copyright \([0-9]\{4\}\)\.$|\1|p' \
+            api/v1alpha1/zz_generated.deepcopy.go | head -n1)"
+          if [ -z "$year" ]; then
+            echo "::warning::Could not read the copyright year from the generated" \
+                 "deepcopy file; falling back to the current year."
+            year="$(date +%Y)"
+          fi
+          echo "Regenerating with YEAR=${year}"
+          make manifests generate YEAR="${year}"
+
+          # `git diff` alone only sees tracked files. A new CRD (a kind added to
+          # api/ without committing config/crd/bases/*.yaml) shows up as an
+          # untracked file, which a plain diff would call clean — hence
+          # --porcelain, which reports both. bin/ is git-ignored, so the tool
+          # binaries the previous step installed do not appear here.
+          #
+          # `git diff` một mình chỉ thấy file đang được theo dõi. Một CRD mới (kind
+          # được thêm vào api/ mà chưa commit config/crd/bases/*.yaml) sẽ là file
+          # untracked, và diff thuần sẽ coi là sạch — nên dùng --porcelain để thấy
+          # cả hai. bin/ đã bị git ignore nên các tool binary vừa cài không lọt vào.
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Generated files are out of date." \
+                 "Run 'make manifests generate' and commit the result."
+            git status --porcelain
+            git diff
+            exit 1
+          fi
+
+      - name: Verify go.mod and go.sum are tidy
+        run: |
+          set -euo pipefail
+          go mod tidy
+          if ! git diff --exit-code go.mod go.sum; then
+            echo "::error::go.mod/go.sum are not tidy. Run 'go mod tidy' and commit."
+            exit 1
+          fi
+
+      # Replaces the `go mod vendor` steps the old workflows relied on: vendor/
+      # is no longer tracked, so go.sum plus this check is what guarantees the
+      # dependency tree is the one that was reviewed.
+      - name: Verify module checksums
+        run: go mod verify

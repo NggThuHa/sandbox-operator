@@ -1,0 +1,43 @@
+#cloud-config
+# ==============================================================================
+# CLOUD-INIT USER-DATA (do Terraform sinh cho từng node)
+# ==============================================================================
+hostname: ${hostname}
+fqdn: ${hostname}.${domain}
+prefer_fqdn_over_hostname: false
+manage_etc_hosts: true
+
+# Tạo user quản trị với sudo không cần mật khẩu để Ansible `become: true` chạy được.
+users:
+  - name: ${ssh_user}
+    gecos: "${cluster_name} lab admin"
+    groups: [adm, sudo]
+    shell: /bin/bash
+    lock_passwd: true
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+ssh_pwauth: false
+disable_root: true
+
+# Nới rootfs ra hết dung lượng volume qcow2 (mặc định cloud image chỉ ~3.5GB).
+growpart:
+  mode: auto
+  devices: ["/"]
+  ignore_growroot_disabled: false
+resize_rootfs: true
+
+package_update: true
+package_upgrade: false
+packages:
+  - qemu-guest-agent   # để virsh/Terraform đọc được trạng thái VM
+  - python3            # yêu cầu tối thiểu của Ansible
+  - python3-apt        # cho module ansible.builtin.apt
+  - curl
+  - lvm2               # role openebs-lvm cần vgcreate/pvcreate
+
+runcmd:
+  - [systemctl, enable, --now, qemu-guest-agent]
+
+final_message: "cloud-init hoan tat sau $UPTIME giay - node ${hostname} da san sang"

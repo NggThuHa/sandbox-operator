@@ -1,0 +1,97 @@
+name: Terraform / validate
+
+# Purpose | Mục đích
+#   EN: Static checks for the QEMU/libvirt stack under infra/terraform: canonical
+#       formatting, a lockfile that actually satisfies the version constraints,
+#       and a full `terraform validate`. Nothing here talks to a hypervisor, so
+#       it is safe to run on every pull request.
+#   VI: Kiểm tra tĩnh cho stack QEMU/libvirt trong infra/terraform: định dạng
+#       chuẩn, lockfile thực sự thoả các ràng buộc phiên bản, và `terraform
+#       validate` đầy đủ. Không bước nào kết nối tới hypervisor nên chạy an toàn
+#       trên mọi pull request.
+#
+# Reusable: called by ci.yml. Never runs on its own.
+# Tái sử dụng: được ci.yml gọi. Không tự chạy độc lập.
+
+on:
+  workflow_call:
+    inputs:
+      terraform-version:
+        description: >-
+          Terraform version to install. "latest" keeps CI on the current release;
+          infra/terraform/versions.tf only requires >= 1.5.0.
+        type: string
+        required: false
+        default: latest
+
+permissions: {}
+
+env:
+  TF_DIR: infra/terraform
+  # Suppresses the "interactive terminal" hints and colour codes in logs.
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+jobs:
+  terraform:
+    name: fmt, init & validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      # The libvirt provider is ~100 MB. Caching the shared plugin directory
+      # turns `terraform init` from a download into a symlink pass.
+      - name: Cache Terraform providers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: >-
+            ${{ runner.os }}-tfplugins-${{
+              hashFiles('infra/terraform/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-tfplugins-
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+          # The wrapper rewrites stdout to feed step outputs; we only need exit
+          # codes, and the wrapper hides them behind its own shim.
+          terraform_wrapper: false
+
+      - name: Show Terraform version
+        run: terraform version
+
+      # -recursive covers modules/qemu as well, so a stray unformatted module
+      # cannot slip in behind the root config.
+      - name: Check formatting
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform fmt -check -recursive -diff
+
+      # -lockfile=readonly is the real check here: it fails when
+      # .terraform.lock.hcl no longer satisfies required_providers, which is how
+      # a hand-edited version constraint gets caught.
+      #
+      # -lockfile=readonly là điểm cốt lõi: nó fail khi .terraform.lock.hcl không
+      # còn thoả required_providers — đúng trường hợp ai đó sửa tay ràng buộc
+      # phiên bản mà quên cập nhật lockfile.
+      - name: Terraform init (no backend)
+        working-directory: ${{ env.TF_DIR }}
+        env:
+          TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.terraform.d/plugin-cache
+          terraform init -backend=false -lockfile=readonly
+
+      # Validates the root module and every module it calls, including
+      # modules/qemu — which is why there is no separate per-module job.
+      - name: Terraform validate
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform validate -no-color
