@@ -30,5 +30,6 @@ jobs:
     name: Trivy
     uses: ./.github/workflows/_security.yml
     permissions:
+      actions: read
       contents: read
       security-events: write

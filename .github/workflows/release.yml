@@ -72,6 +72,7 @@ jobs:
     name: Security
     uses: ./.github/workflows/_security.yml
     permissions:
+      actions: read
       contents: read
       security-events: write
 
@@ -182,6 +183,7 @@ jobs:
     needs: [verify, test, security]
     uses: ./.github/workflows/_images.yml
     permissions:
+      actions: read
       contents: read
       packages: write
       security-events: write

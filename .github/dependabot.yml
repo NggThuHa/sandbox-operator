@@ -28,11 +28,8 @@ updates:
   - package-ecosystem: gomod
     directory: /
     schedule:
-      interval: weekly
-      day: monday
-      time: "04:00"
-      timezone: Asia/Ho_Chi_Minh
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 1
     labels:
       - dependencies
       - go
@@ -65,11 +62,8 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
-      time: "04:15"
-      timezone: Asia/Ho_Chi_Minh
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 1
     labels:
       - dependencies
       - ci

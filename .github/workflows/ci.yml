@@ -137,6 +137,7 @@ jobs:
     if: needs.changes.outputs.images == 'true'
     uses: ./.github/workflows/_images.yml
     permissions:
+      actions: read
       contents: read
       # Pushing only happens on main; the permission is scoped to this job either
       # way. Chỉ push khi ở main; quyền này dù sao cũng bị giới hạn trong job này.
@@ -154,6 +155,7 @@ jobs:
     name: Security
     uses: ./.github/workflows/_security.yml
     permissions:
+      actions: read
       contents: read
       security-events: write
     with:
