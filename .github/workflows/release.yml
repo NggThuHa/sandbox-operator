@@ -51,8 +51,10 @@ jobs:
     uses: ./.github/workflows/_go-test.yml
     permissions:
       contents: read
+    # Keep the release gate aligned with the repository-wide baseline in Makefile.
+    # Giữ release gate đồng bộ với baseline toàn repository trong Makefile.
     with:
-      coverage-min: "25"
+      coverage-min: "13"
     secrets: inherit
 
   # EN: Yes, this repeats what ci.yml already ran for a main push. It is not

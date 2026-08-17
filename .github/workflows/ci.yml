@@ -99,12 +99,12 @@ jobs:
     uses: ./.github/workflows/_go-test.yml
     permissions:
       contents: read
-    # 25% is the floor the suite clears today (internal/controller only). Raise
-    # it as coverage grows; see hack/ci/coverage-gate.sh.
-    # 25% là ngưỡng bộ test hiện đạt được (chỉ internal/controller). Hãy nâng dần
-    # khi coverage tăng; xem hack/ci/coverage-gate.sh.
+    # 13% is the current repository-wide baseline. Raise it as tests are added;
+    # see hack/ci/coverage-gate.sh.
+    # 13% là baseline hiện tại của toàn repository. Hãy nâng dần khi thêm test;
+    # xem hack/ci/coverage-gate.sh.
     with:
-      coverage-min: "25"
+      coverage-min: "13"
     secrets: inherit
 
   go-e2e:
